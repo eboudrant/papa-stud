@@ -3,3 +3,6 @@ __pycache__/
 .env
 data/
 .DS_Store
+node_modules/
+test-results/
+playwright-report/

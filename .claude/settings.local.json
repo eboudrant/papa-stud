@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(head -30 /Users/eboudrant/more-wax/docs/*.md)",
+      "Bash(docker compose up:*)",
+      "Bash(docker compose:*)",
+      "Bash(git init:*)",
+      "Bash(git remote:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "WebSearch",
+      "Bash(claude mcp:*)",
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__take_screenshot",
+      "Bash(ls /Users/eboudrant/more-wax/*.md /Users/eboudrant/more-wax/**/*.md)"
+    ]
+  }
+}
