@@ -16,6 +16,34 @@ docker compose up --build -d
 # App at http://localhost:8770
 ```
 
+## Testing
+
+Screenshot tests use Playwright in Docker for consistent rendering. Desktop only (1280x800), zero-tolerance pixel diff.
+
+```bash
+# Build test image
+docker build -f Dockerfile.test -t papastud-test .
+
+# Run tests
+docker run --rm -e CI=true papastud-test npx playwright test
+
+# Update baselines after intentional UI changes
+docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots
+```
+
+- Baselines live in `tests/screenshots/*.png` (flat, no subdirectories)
+- Tests live in `tests/screenshots/*.spec.js`
+- Config: `playwright.config.js` — starts `python3 server.py` on port 8770 automatically
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on push to main and PRs:
+
+- **Python checks** — syntax + import verification (3.11, 3.12, 3.13)
+- **Python lint** — ruff check + format
+- **JS checks** — Node syntax validation
+- **Screenshot tests** — Docker-based Playwright, uploads artifacts + posts PR comment on failure
+
 ## Git Workflow
 
 Create a feature branch for every new piece of work. When ready to merge, create a changelog entry in `CHANGES/` before merging to main.
