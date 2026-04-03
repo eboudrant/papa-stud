@@ -13,7 +13,22 @@
       "Bash(claude mcp:*)",
       "mcp__chrome-devtools__new_page",
       "mcp__chrome-devtools__take_screenshot",
-      "Bash(ls /Users/eboudrant/more-wax/*.md /Users/eboudrant/more-wax/**/*.md)"
+      "Bash(ls /Users/eboudrant/more-wax/*.md /Users/eboudrant/more-wax/**/*.md)",
+      "Bash(head -50 /Users/eboudrant/more-wax/tests/test_*.py)",
+      "Bash(grep -E \"\\\\.\\(json|yml|yaml|js|py\\)$|^d\")",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(git checkout:*)",
+      "Bash(pip install:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(pip3 install:*)",
+      "Bash(python3 -m pip install --user ruff)",
+      "Bash(python3 -m ruff check server/ server.py)",
+      "Bash(python3 -m ruff format --check server/ server.py)",
+      "Bash(npx -y @anthropic-ai/ruff@latest)",
+      "Bash(brew list:*)",
+      "Bash(pipx run:*)"
     ]
   }
 }
