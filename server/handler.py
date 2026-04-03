@@ -1,17 +1,15 @@
 import http.server
-import os
 from pathlib import Path
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-
     def do_GET(self):
         if self.path == "/" or self.path == "":
             self._serve_file(STATIC_DIR / "index.html", "text/html")
         elif self.path.startswith("/static/"):
-            rel = self.path[len("/static/"):]
+            rel = self.path[len("/static/") :]
             file_path = STATIC_DIR / rel
             if file_path.resolve().is_relative_to(STATIC_DIR) and file_path.is_file():
                 self._serve_file(file_path)

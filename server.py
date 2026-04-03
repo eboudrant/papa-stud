@@ -15,9 +15,9 @@ def main():
 
     http_server = http.server.ThreadingHTTPServer(("0.0.0.0", port), Handler)
 
-    print(f"\n  Papa Stud is running!")
+    print("\n  Papa Stud is running!")
     print(f"    ->  http://localhost:{port}")
-    print(f"    Press Ctrl+C to stop\n")
+    print("    Press Ctrl+C to stop\n")
 
     try:
         http_server.serve_forever()
