@@ -1,0 +1,15 @@
+FROM mcr.microsoft.com/playwright:v1.59.1-noble
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json ./
+RUN npm install
+
+COPY . .
+
+RUN mkdir -p data
+
+CMD ["npx", "playwright", "test"]

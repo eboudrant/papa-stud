@@ -1,0 +1,12 @@
+{
+  "name": "papa-stud",
+  "private": true,
+  "scripts": {
+    "test:screenshots": "docker run --rm -e CI=true papastud-test npx playwright test",
+    "test:screenshots:update": "docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots",
+    "test:screenshots:build": "docker build -f Dockerfile.test -t papastud-test ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.59.1"
+  }
+}

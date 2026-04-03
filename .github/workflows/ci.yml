@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-checks:
+    name: Python
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Check syntax
+        run: python -m compileall server/ server.py -q
+
+      - name: Verify imports
+        run: |
+          python -c "import server.handler"
+
+  python-lint:
+    name: Python Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check server/ server.py
+
+      - name: Check formatting
+        run: ruff format --check server/ server.py
+
+  js-checks:
+    name: JavaScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Check JS syntax
+        run: |
+          exit_code=0
+          for f in $(find static -name "*.js" 2>/dev/null); do
+            if ! node --check "$f" 2>&1; then
+              echo "Syntax error in $f"
+              exit_code=1
+            fi
+          done
+          exit $exit_code
+
+  screenshot-tests:
+    name: Screenshot Tests
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.test
+          load: true
+          tags: papastud-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run screenshot tests
+        run: |
+          docker run --rm \
+            -e CI=true \
+            -v ${{ github.workspace }}/test-results:/app/test-results \
+            -v ${{ github.workspace }}/playwright-report:/app/playwright-report \
+            papastud-test \
+            npx playwright test --reporter=list,html
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 14
+
+      - name: Upload HTML report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Post failure summary on PR
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const resultsDir = 'test-results';
+            let failures = [];
+            if (fs.existsSync(resultsDir)) {
+              const dirs = fs.readdirSync(resultsDir).filter(d =>
+                fs.statSync(path.join(resultsDir, d)).isDirectory()
+              );
+              for (const dir of dirs) {
+                const files = fs.readdirSync(path.join(resultsDir, dir));
+                if (files.some(f => f.endsWith('-diff.png') || f === 'error-context.md')) {
+                  const name = dir.replace(/^hello-/, '').replace(/-/g, ' ');
+                  failures.push(name);
+                }
+              }
+            }
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let body = `## Screenshot Tests Failed\n\n`;
+            body += `**${failures.length} test(s) failed:**\n\n`;
+            for (const f of failures) {
+              body += `- ${f}\n`;
+            }
+            body += `\nDownload the diff images and HTML report from the [workflow artifacts](${runUrl}).\n`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
