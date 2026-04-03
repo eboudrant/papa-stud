@@ -1,0 +1,11 @@
+services:
+  papastud:
+    build: .
+    ports:
+      - "8770:8770"
+    volumes:
+      - papastud-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  papastud-data:
