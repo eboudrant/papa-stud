@@ -74,9 +74,11 @@ class TestScanProject(unittest.TestCase):
             failures.mkdir(parents=True)
             golden.mkdir(parents=True)
 
+            # Golden created first, then delta (simulates verify after record)
+            _make_png(golden / "com.example_MyTest_testFoo.png", b=255)
+            os.utime(golden / "com.example_MyTest_testFoo.png", (1000000, 1000000))
             _make_png(failures / "delta-com.example_MyTest_testFoo.png")
             _make_png(failures / "com.example_MyTest_testFoo.png", r=255)
-            _make_png(golden / "com.example_MyTest_testFoo.png", b=255)
 
             result = scan_project(str(root))
             self.assertEqual(len(result["modules"]), 1)
@@ -109,6 +111,42 @@ class TestScanProject(unittest.TestCase):
             result = scan_project(str(root))
             self.assertEqual(len(result["failures"]), 1)
             self.assertFalse(result["failures"][0]["has_golden"])
+
+    def test_stale_delta_filtered_when_golden_newer(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            failures = root / "app" / "build" / "paparazzi" / "failures"
+            golden = root / "app" / "src" / "test" / "snapshots" / "images"
+            failures.mkdir(parents=True)
+            golden.mkdir(parents=True)
+
+            # Delta created first (old)
+            _make_png(failures / "delta-com.example_Test_method.png")
+            _make_png(failures / "com.example_Test_method.png")
+            os.utime(failures / "delta-com.example_Test_method.png", (1000000, 1000000))
+            os.utime(failures / "com.example_Test_method.png", (1000000, 1000000))
+
+            # Golden created after (newer = recordPaparazzi ran)
+            _make_png(golden / "com.example_Test_method.png")
+
+            result = scan_project(str(root))
+            self.assertEqual(len(result["failures"]), 0)
+
+    def test_snapshot_count_included(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            paparazzi = root / "app" / "build" / "paparazzi"
+            paparazzi.mkdir(parents=True)
+            golden = root / "app" / "src" / "test" / "snapshots" / "images"
+            golden.mkdir(parents=True)
+            _make_png(golden / "test1.png")
+            _make_png(golden / "test2.png")
+            _make_png(golden / "test3.png")
+
+            result = scan_project(str(root))
+            self.assertEqual(len(result["modules"]), 1)
+            self.assertEqual(result["modules"][0]["snapshot_count"], 3)
+            self.assertEqual(result["modules"][0]["failure_count"], 0)
 
 
 if __name__ == "__main__":

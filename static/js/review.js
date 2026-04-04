@@ -92,8 +92,10 @@ async function _loadMoreFailures(scanId) {
 function _renderSidebar(data) {
   const sidebar = document.getElementById('sidebar');
   const tree = {};
+  const moduleSnapshots = {};
   for (const mod of data.modules) {
-    tree[mod.name] = { count: mod.failure_count || mod.failureCount, packages: {} };
+    tree[mod.name] = { count: mod.failure_count ?? mod.failureCount ?? 0, packages: {} };
+    moduleSnapshots[mod.name] = mod.snapshot_count || 0;
   }
   for (const f of _allFailures) {
     if (!tree[f.module]) tree[f.module] = { count: 0, packages: {} };
@@ -105,11 +107,22 @@ function _renderSidebar(data) {
     tree[f.module].packages[pkg].classes[cls]++;
   }
 
+  const abbrevMap = _buildAbbrevMap(Object.keys(tree));
+  // Sort: modules with failures first, then alphabetical
+  const sorted = Object.entries(tree).sort((a, b) => {
+    if (a[1].count > 0 && b[1].count === 0) return -1;
+    if (a[1].count === 0 && b[1].count > 0) return 1;
+    return a[0].localeCompare(b[0]);
+  });
+
   let html = `<div class="sidebar-title">Modules</div>`;
   html += `<div class="tree-item ${!_activeModule ? 'active' : ''}" onclick="_filterModule(null)">All (${data.stats.total})</div>`;
 
-  for (const [mod, mdata] of Object.entries(tree)) {
-    html += `<div class="tree-item tree-module ${_activeModule === mod ? 'active' : ''}" onclick="_filterModule('${escAttr(mod)}')">${escHtml(mod)} (${mdata.count})</div>`;
+  for (const [mod, mdata] of sorted) {
+    const countLabel = mdata.count > 0 ? `<span class="tree-count">(${mdata.count})</span>` : '';
+    const failClass = mdata.count > 0 ? ' tree-failed' : '';
+    const sc = moduleSnapshots[mod];
+    html += `<div class="tree-item tree-module${failClass} ${_activeModule === mod ? 'active' : ''}" onclick="_filterModule('${escAttr(mod)}')" title="${escAttr(mod)}"><div class="tree-top"><span class="tree-name">${escHtml(abbrevMap[mod] || mod)}</span>${countLabel}</div>${snapshotBar(sc, mdata.count)}</div>`;
     if (_activeModule === mod) {
       for (const [pkg, pdata] of Object.entries(mdata.packages)) {
         html += `<div class="tree-item tree-package">${escHtml(pkg)} (${pdata.count})</div>`;
@@ -156,12 +169,56 @@ function _updateCounter() {
   const el = document.getElementById('review-counter');
   if (!_scanData) return;
   el.textContent = `${_scanData.stats.total} failures`;
+
+  const grid = document.getElementById('thumbnail-grid');
+  if (_allFailures.length === 0 && grid) {
+    if (_activeModule) {
+      const mod = _scanData.modules.find(m => m.name === _activeModule);
+      const sc = mod?.snapshot_count || 0;
+      const statsText = sc > 0 ? `${sc} snapshots passing` : '';
+      grid.innerHTML = `<div class="empty-state">No failures in ${escHtml(_activeModule)}. ${statsText}</div>`;
+    } else if (_scanData.stats.total === 0) {
+      grid.innerHTML = '<div class="empty-state">No current failures. All screenshot tests are passing.</div>';
+    }
+  }
 }
 
 function _filterModule(mod) {
   _activeModule = mod;
   _resetAndReload();
 }
+
+function _buildAbbrevMap(moduleNames) {
+  // Find common prefixes (2+ segments) shared by 3+ modules, abbreviate to initials
+  // e.g. :libraries:starcourt: -> :l:s:
+  const prefixCount = {};
+  for (const name of moduleNames) {
+    const parts = name.split(':').filter(Boolean);
+    for (let len = 2; len < parts.length; len++) {
+      const prefix = ':' + parts.slice(0, len).join(':') + ':';
+      prefixCount[prefix] = (prefixCount[prefix] || 0) + 1;
+    }
+  }
+  // Keep prefixes shared by 3+ modules, pick the longest matching per module
+  const commonPrefixes = Object.entries(prefixCount)
+    .filter(([, c]) => c >= 3)
+    .map(([p]) => p)
+    .sort((a, b) => b.length - a.length);
+
+  const abbrevMap = {};
+  for (const name of moduleNames) {
+    let best = null;
+    for (const prefix of commonPrefixes) {
+      if (name.startsWith(prefix)) { best = prefix; break; }
+    }
+    if (best) {
+      const abbrev = ':' + best.split(':').filter(Boolean).map(s => s[0]).join(':') + ':';
+      abbrevMap[name] = abbrev + name.slice(best.length);
+    }
+  }
+  return abbrevMap;
+}
+
 
 let _searchTimeout = null;
 function _onSearch(value) {

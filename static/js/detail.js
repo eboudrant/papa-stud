@@ -16,17 +16,68 @@ function showDetail(scanId, filename) {
   _toggleShowing = 'golden';
   _loadDetail(scanId, filename);
 
-  const _keyHandler = (e) => {
+  const _heldKeys = new Set();
+  let _moveLoop = null;
+
+  function _startMoveLoop() {
+    if (_moveLoop) return;
+    let last = performance.now();
+    function tick(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      const speed = 400 * dt; // pixels per second
+      const zoomSpeed = 1 + 1.5 * dt; // zoom factor per second
+      let dx = 0, dy = 0, zf = 1;
+      if (_heldKeys.has('panLeft')) dx += speed;
+      if (_heldKeys.has('panRight')) dx -= speed;
+      if (_heldKeys.has('zoomIn')) zf = zoomSpeed;
+      if (_heldKeys.has('zoomOut')) zf = 1 / zoomSpeed;
+      if (dx !== 0 || dy !== 0) {
+        _panZoom.ox += dx;
+        _panZoom.oy += dy;
+      }
+      if (zf !== 1) {
+        const { x: cx, y: cy } = _getZoomCenter();
+        const newScale = Math.max(_fitScale, Math.min(_panZoom.scale * zf, 20));
+        const ratio = newScale / _panZoom.scale;
+        _panZoom.ox = cx - (cx - _panZoom.ox) * ratio;
+        _panZoom.oy = cy - (cy - _panZoom.oy) * ratio;
+        _panZoom.scale = newScale;
+      }
+      if (dx !== 0 || dy !== 0 || zf !== 1) _applyPanZoom();
+      if (_heldKeys.size > 0) _moveLoop = requestAnimationFrame(tick);
+      else _moveLoop = null;
+    }
+    _moveLoop = requestAnimationFrame(tick);
+  }
+
+  function _mapMoveKey(key) {
+    switch (key) {
+      case 'a': case 'A': case 'j': case 'J': return 'panLeft';
+      case 'd': case 'D': case 'l': case 'L': return 'panRight';
+      case 'w': case 'W': case 'i': case 'I': case '+': case '=': return 'zoomIn';
+      case 's': case 'S': case 'k': case 'K': case '-': return 'zoomOut';
+      default: return null;
+    }
+  }
+
+  const _keyDown = (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const move = _mapMoveKey(e.key);
+    if (move) {
+      e.preventDefault();
+      _heldKeys.add(move);
+      _startMoveLoop();
+      return;
+    }
     switch (e.key) {
-      case 'ArrowRight': case 'j': _detailNext(scanId); break;
-      case 'ArrowLeft': case 'k': _detailPrev(scanId); break;
+      case 'ArrowRight': _detailNext(scanId); break;
+      case 'ArrowLeft': _detailPrev(scanId); break;
       case 'Escape': navigate(`/scans/${scanId}`); break;
       case '1': _setViewMode('delta', scanId); break;
       case '2': _setViewMode('toggle', scanId); break;
       case '3': _setViewMode('slider', scanId); break;
-      case '+': case '=': _zoomIn(); break;
-      case '-': _zoomOut(); break;
+      case 'e': case 'E': _cycleViewMode(scanId); break;
       case '0': case 'r': case 'R': _zoomReset(); break;
       case 't': case 'T':
         if (_viewMode === 'toggle') {
@@ -42,12 +93,20 @@ function showDetail(scanId, filename) {
         break;
     }
   };
-  document.addEventListener('keydown', _keyHandler);
+  const _keyUp = (e) => {
+    const move = _mapMoveKey(e.key);
+    if (move) _heldKeys.delete(move);
+  };
+  document.addEventListener('keydown', _keyDown);
+  document.addEventListener('keyup', _keyUp);
 
   return () => {
-    document.removeEventListener('keydown', _keyHandler);
+    document.removeEventListener('keydown', _keyDown);
+    document.removeEventListener('keyup', _keyUp);
     document.removeEventListener('mousemove', _onPanMove);
     document.removeEventListener('mouseup', _onPanUp);
+    _heldKeys.clear();
+    if (_moveLoop) { cancelAnimationFrame(_moveLoop); _moveLoop = null; }
     _panDrag = null;
   };
 }
@@ -144,9 +203,15 @@ function _renderDetail(scanId) {
       </div>
       ${viewContent}
       <div class="detail-filename">${escHtml(f.filename)}</div>
-      <div class="detail-shortcuts">1/2/3=mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}scroll=zoom  drag=pan  R=reset  j/&rarr;=next  k/&larr;=prev  esc=back</div>
+      <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  &larr;=prev  &rarr;=next  esc=back</div>
     </div>
   `;
+}
+
+function _cycleViewMode(scanId) {
+  const modes = ['delta', 'toggle', 'slider'];
+  const next = modes[(modes.indexOf(_viewMode) + 1) % modes.length];
+  _setViewMode(next, scanId);
 }
 
 function _setViewMode(mode, scanId) {
@@ -259,6 +324,7 @@ function _initPanZoom(skipReset) {
   area.addEventListener('wheel', _onWheel, { passive: false });
   area.addEventListener('mousedown', _onDragStart);
   area.addEventListener('dblclick', _onDblClick);
+  area.addEventListener('mousemove', _onTrackCursor);
   // Remove previous document listeners before adding new ones to prevent accumulation
   document.removeEventListener('mousemove', _onPanMove);
   document.removeEventListener('mouseup', _onPanUp);
@@ -281,6 +347,46 @@ function _centerImage() {
   const h = img.naturalHeight * _panZoom.scale;
   _panZoom.ox = (area.clientWidth - w) / 2;
   _panZoom.oy = (area.clientHeight - h) / 2;
+}
+
+let _cursorInArea = false;
+let _cursorX = 0;
+let _cursorY = 0;
+
+function _onTrackCursor(e) {
+  const area = document.getElementById('view-area');
+  if (!area) return;
+  const rect = area.getBoundingClientRect();
+  _cursorX = e.clientX - rect.left;
+  _cursorY = e.clientY - rect.top;
+  _cursorInArea = e.clientX >= rect.left && e.clientX <= rect.right &&
+                  e.clientY >= rect.top && e.clientY <= rect.bottom;
+}
+
+function _getZoomCenter() {
+  const area = document.getElementById('view-area');
+  if (!area) return { x: 0, y: 0 };
+  if (_cursorInArea) return { x: _cursorX, y: _cursorY };
+  return { x: area.clientWidth / 2, y: area.clientHeight / 2 };
+}
+
+let _animFrame = null;
+function _animateTo(targetOx, targetOy, targetScale) {
+  if (_animFrame) cancelAnimationFrame(_animFrame);
+  const startOx = _panZoom.ox, startOy = _panZoom.oy, startScale = _panZoom.scale;
+  const start = performance.now();
+  const duration = 200;
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t * (2 - t); // ease-out
+    _panZoom.ox = startOx + (targetOx - startOx) * ease;
+    _panZoom.oy = startOy + (targetOy - startOy) * ease;
+    _panZoom.scale = startScale + (targetScale - startScale) * ease;
+    _applyPanZoom();
+    if (t < 1) _animFrame = requestAnimationFrame(step);
+    else _animFrame = null;
+  }
+  _animFrame = requestAnimationFrame(step);
 }
 
 function _zoomAtPoint(newScale, px, py) {
@@ -343,26 +449,35 @@ function _onPanUp() {
 }
 
 function _zoomIn() {
-  const area = document.getElementById('view-area');
-  if (!area) return;
-  const newScale = Math.min(_panZoom.scale * 1.3, 20);
-  _zoomAtPoint(newScale, area.clientWidth / 2, area.clientHeight / 2);
-  _applyPanZoom();
+  const { x: cx, y: cy } = _getZoomCenter();
+  const newScale = Math.min(_panZoom.scale * 1.5, 20);
+  const ratio = newScale / _panZoom.scale;
+  _animateTo(
+    cx - (cx - _panZoom.ox) * ratio,
+    cy - (cy - _panZoom.oy) * ratio,
+    newScale
+  );
 }
 
 function _zoomOut() {
-  const area = document.getElementById('view-area');
-  if (!area) return;
-  const newScale = Math.max(_fitScale, _panZoom.scale / 1.3);
-  _zoomAtPoint(newScale, area.clientWidth / 2, area.clientHeight / 2);
-  _applyPanZoom();
+  const { x: cx, y: cy } = _getZoomCenter();
+  const newScale = Math.max(_fitScale, _panZoom.scale / 1.5);
+  const ratio = newScale / _panZoom.scale;
+  _animateTo(
+    cx - (cx - _panZoom.ox) * ratio,
+    cy - (cy - _panZoom.oy) * ratio,
+    newScale
+  );
 }
 
 function _zoomReset() {
   _fitScale = _computeFitScale();
-  _panZoom.scale = _fitScale;
-  _centerImage();
-  _applyPanZoom();
+  const img = document.getElementById('detail-img');
+  const area = document.getElementById('view-area');
+  if (!img || !area || !img.naturalWidth) return;
+  const w = img.naturalWidth * _fitScale;
+  const h = img.naturalHeight * _fitScale;
+  _animateTo((area.clientWidth - w) / 2, (area.clientHeight - h) / 2, _fitScale);
 }
 
 function _applyPanZoom() {

@@ -1,96 +1,195 @@
 """Scan Gradle projects for Paparazzi screenshot failures.
 
 Finds modules with build/paparazzi/failures/, detects current vs stale
-failures using mtime clustering, and matches golden images.
+failures using mtime clustering, matches golden images, and parses
+JUnit XML for test statistics.
 """
 
+import os
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from server.filename_parser import base_filename, parse_filename
 
-# Files within this window (seconds) are considered part of the same test run
 MTIME_CLUSTER_TOLERANCE = 60.0
+
+PRUNE_DIRS = {
+    ".git",
+    ".gradle",
+    ".idea",
+    "node_modules",
+    ".cxx",
+    ".transforms",
+    "src",
+    ".kotlin",
+}
 
 
 def scan_project(project_path):
-    """Scan a Gradle project for Paparazzi failures across all modules.
+    """Scan a Gradle project for Paparazzi failures. Blocking convenience wrapper."""
+    result = {"modules": [], "failures": []}
+    for phase, data in scan_project_incremental(project_path):
+        if phase == "complete":
+            result = data
+    return result
 
-    Returns a dict with 'modules' and 'failures' lists.
+
+def scan_project_incremental(project_path, cancel_event=None):
+    """Yield (phase, data) tuples as the scan progresses.
+
+    Phases:
+        ("discovered", {"total": N})
+        ("progress", {"scanned": i, "current_module": name, "failures_so_far": N})
+        ("cancelled", {})
+        ("complete", {"modules": [...], "failures": [...]})
     """
     root = Path(project_path)
+
+    # Phase 1: Fast discovery with os.walk + pruning
+    discovered = []
+    for module_info in _discover_paparazzi_modules(root):
+        discovered.append(module_info)
+        yield ("discovering", {"found": len(discovered), "current_dir": module_info[1]})
+    yield ("discovered", {"total": len(discovered)})
+
+    # Phase 2: Process each module
     modules = []
     failures = []
+    for i, (failures_dir, module_name, module_path) in enumerate(discovered):
+        if cancel_event and cancel_event.is_set():
+            yield ("cancelled", {})
+            return
 
-    # Find all build/paparazzi/failures directories
-    for failures_dir in sorted(root.rglob("build/paparazzi/failures")):
-        if not failures_dir.is_dir():
-            continue
+        golden_dir = module_path / "src" / "test" / "snapshots" / "images"
+        test_stats, xml_mtime = _parse_junit_xml(module_path)
 
-        # Derive module name from path relative to project root
-        module_rel = failures_dir.relative_to(root)
-        # e.g. app/build/paparazzi/failures -> module is :app
-        module_parts = module_rel.parts[: module_rel.parts.index("build")]
-        module_name = ":" + ":".join(module_parts) if module_parts else ":root"
-
-        # Find golden images directory
-        if module_parts:
-            golden_dir = (
-                root / Path(*module_parts) / "src" / "test" / "snapshots" / "images"
-            )
-        else:
-            golden_dir = root / "src" / "test" / "snapshots" / "images"
-
-        # Get current failures (filter stale)
-        current = _detect_current_failures(failures_dir)
-        if not current:
-            continue
-
+        # Process failures if the module has a failures directory
         module_failures = []
-        for delta_path in current:
-            fname = delta_path.name
-            base = base_filename(fname)
-            parsed = parse_filename(base)
+        if failures_dir:
+            # Filter stale deltas: if XML reports 0 failures and is newer,
+            # a passing run happened after the verify — deltas are leftover.
+            # If XML reports failures > 0, deltas are from the same run.
+            current = _detect_current_failures(failures_dir)
+            if xml_mtime > 0 and current and test_stats and test_stats["failed"] == 0:
+                current = [f for f in current if f.stat().st_mtime > xml_mtime]
 
-            actual_path = failures_dir / base
-            golden_path = golden_dir / base
+            # Also filter deltas whose golden image is newer (recordPaparazzi
+            # updated the golden after the verify that produced the delta)
+            if current and golden_dir.is_dir():
+                filtered = []
+                for f in current:
+                    golden = golden_dir / base_filename(f.name)
+                    if golden.is_file() and golden.stat().st_mtime > f.stat().st_mtime:
+                        continue  # golden is newer — delta is stale
+                    filtered.append(f)
+                current = filtered
 
-            module_failures.append(
-                {
-                    "module": module_name,
-                    "filename": base,
-                    "delta_path": str(delta_path),
-                    "actual_path": str(actual_path) if actual_path.is_file() else None,
-                    "golden_path": str(golden_path) if golden_path.is_file() else None,
-                    "package": parsed["package"],
-                    "class_name": parsed["class_name"],
-                    "method": parsed["method"],
-                    "snapshot_name": parsed["snapshot_name"],
-                    "status": "pending",
-                    "has_golden": golden_path.is_file(),
-                    "has_actual": actual_path.is_file(),
-                    "mtime": delta_path.stat().st_mtime,
-                }
-            )
+            for delta_path in current:
+                fname = delta_path.name
+                base = base_filename(fname)
+                parsed = parse_filename(base)
+                actual_path = failures_dir / base
+                golden_path = golden_dir / base
 
+                module_failures.append(
+                    {
+                        "module": module_name,
+                        "filename": base,
+                        "delta_path": str(delta_path),
+                        "actual_path": str(actual_path)
+                        if actual_path.is_file()
+                        else None,
+                        "golden_path": str(golden_path)
+                        if golden_path.is_file()
+                        else None,
+                        "package": parsed["package"],
+                        "class_name": parsed["class_name"],
+                        "method": parsed["method"],
+                        "snapshot_name": parsed["snapshot_name"],
+                        "status": "pending",
+                        "has_golden": golden_path.is_file(),
+                        "has_actual": actual_path.is_file(),
+                        "mtime": delta_path.stat().st_mtime,
+                    }
+                )
+
+        # Count golden snapshots (= total Paparazzi tests)
+        snapshot_count = (
+            len(list(golden_dir.glob("*.png"))) if golden_dir.is_dir() else 0
+        )
+
+        # Always include modules that have Paparazzi (even if 0 failures)
         modules.append(
             {
                 "name": module_name,
-                "failures_path": str(failures_dir),
+                "failures_path": str(failures_dir) if failures_dir else None,
                 "golden_path": str(golden_dir),
                 "failure_count": len(module_failures),
+                "snapshot_count": snapshot_count,
+                "test_stats": test_stats,
             }
         )
-        failures.extend(module_failures)
+        if module_failures:
+            failures.extend(module_failures)
 
-    return {"modules": modules, "failures": failures}
+        yield (
+            "progress",
+            {
+                "scanned": i + 1,
+                "current_module": module_name,
+                "failures_so_far": len(failures),
+            },
+        )
+
+    yield ("complete", {"modules": modules, "failures": failures})
+
+
+def _discover_paparazzi_modules(root):
+    """Walk project tree with aggressive pruning, yielding modules as found.
+
+    Discovers any module with build/paparazzi/ (including passing modules).
+    Yields (failures_dir_or_None, module_name, module_path) tuples.
+    """
+    root_str = str(root)
+
+    for dirpath, dirnames, _filenames in os.walk(root_str):
+        dirnames[:] = [d for d in dirnames if d not in PRUNE_DIRS]
+
+        rel = os.path.relpath(dirpath, root_str)
+        parts = rel.split(os.sep)
+
+        # Aggressive pruning inside build/ directories
+        if "build" in parts:
+            idx = parts.index("build")
+            depth = len(parts) - idx
+            if depth == 1:
+                dirnames[:] = [
+                    d for d in dirnames if d in ("paparazzi", "test-results")
+                ]
+            elif depth == 2 and parts[-1] == "paparazzi":
+                # Found a paparazzi module
+                module_parts = parts[:idx]
+                if module_parts and module_parts != ["."]:
+                    module_name = ":" + ":".join(module_parts)
+                    module_path = root / Path(*module_parts)
+                else:
+                    module_name = ":root"
+                    module_path = root
+                failures_dir = Path(dirpath) / "failures"
+                yield (
+                    failures_dir if failures_dir.is_dir() else None,
+                    module_name,
+                    module_path,
+                )
+                dirnames.clear()
+            elif depth == 2 and parts[-1] == "test-results":
+                pass
+            else:
+                dirnames.clear()
 
 
 def _detect_current_failures(failures_dir):
-    """Return only delta files from the most recent verifyPaparazzi run.
-
-    Groups delta-*.png files by mtime. Files within MTIME_CLUSTER_TOLERANCE
-    seconds of each other are in the same cluster. Returns the latest cluster.
-    """
+    """Return only delta files from the most recent verifyPaparazzi run."""
     delta_files = []
     for f in failures_dir.iterdir():
         if f.name.startswith("delta-") and f.name.endswith(".png") and f.is_file():
@@ -99,10 +198,7 @@ def _detect_current_failures(failures_dir):
     if not delta_files:
         return []
 
-    # Sort by mtime descending
     delta_files.sort(key=lambda x: x[1], reverse=True)
-
-    # Build the latest cluster: start from newest, include all within tolerance
     latest_mtime = delta_files[0][1]
     current = []
     for f, mtime in delta_files:
@@ -112,3 +208,63 @@ def _detect_current_failures(failures_dir):
             break
 
     return current
+
+
+def _parse_junit_xml(module_path):
+    """Parse JUnit XML test results for a module.
+
+    Looks in build/test-results/testDebugUnitTest/ and testReleaseUnitTest/.
+    Returns (stats_dict, newest_xml_mtime) or (None, 0) if no XML found.
+    """
+    stats = {
+        "tests": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "errors": 0,
+        "time": 0.0,
+    }
+    found = False
+    newest_mtime = 0.0
+
+    for variant in ("testDebugUnitTest", "testReleaseUnitTest"):
+        results_dir = module_path / "build" / "test-results" / variant
+        if not results_dir.is_dir():
+            continue
+        for xml_file in results_dir.glob("TEST-*.xml"):
+            parsed = _parse_single_junit_xml(xml_file)
+            if parsed:
+                found = True
+                stats["tests"] += parsed["tests"]
+                stats["failed"] += parsed["failed"]
+                stats["skipped"] += parsed["skipped"]
+                stats["errors"] += parsed["errors"]
+                stats["time"] += parsed["time"]
+                xml_mtime = xml_file.stat().st_mtime
+                if xml_mtime > newest_mtime:
+                    newest_mtime = xml_mtime
+
+    if not found:
+        return None, 0.0
+
+    stats["passed"] = (
+        stats["tests"] - stats["failed"] - stats["skipped"] - stats["errors"]
+    )
+    stats["time"] = round(stats["time"], 2)
+    return stats, newest_mtime
+
+
+def _parse_single_junit_xml(xml_path):
+    """Parse a single JUnit XML file. Returns stats dict or None."""
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+        return {
+            "tests": int(root.get("tests", 0)),
+            "failed": int(root.get("failures", 0)),
+            "skipped": int(root.get("skipped", 0)),
+            "errors": int(root.get("errors", 0)),
+            "time": float(root.get("time", 0)),
+        }
+    except (ET.ParseError, ValueError, OSError):
+        return None

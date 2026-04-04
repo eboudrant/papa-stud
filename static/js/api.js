@@ -55,3 +55,13 @@ function escHtml(str) {
 function escAttr(str) {
   return escHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+/** Render a snapshot pass/fail bar. cssClass defaults to 'test-bar'. */
+function snapshotBar(total, failed, cssClass) {
+  if (!total || total === 0) return '';
+  const cls = cssClass || 'test-bar';
+  const minPct = cls === 'scan-test-bar' ? 2 : 8;
+  const failedPct = failed > 0 ? Math.max(failed / total * 100, minPct) : 0;
+  const passedPct = Math.max(0, 100 - failedPct);
+  return `<div class="${cls}" title="${total} snapshots, ${failed} failed"><div class="test-bar-passed" style="width:${passedPct}%"></div><div class="test-bar-failed" style="width:${failedPct}%"></div></div>`;
+}

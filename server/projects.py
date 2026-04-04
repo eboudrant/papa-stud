@@ -2,6 +2,7 @@
 
 Handles project CRUD, scan creation, failure status updates.
 All data persisted as JSON files under DATA_DIR.
+Uses an index file for fast scan listing.
 """
 
 import json
@@ -29,6 +30,10 @@ def _scans_dir():
 
 def _scan_path(scan_id):
     return _scans_dir() / f"{scan_id}.json"
+
+
+def _index_path():
+    return _scans_dir() / "index.json"
 
 
 def _read_json(path):
@@ -83,51 +88,100 @@ def delete_project(project_id):
         _write_json(_projects_path(), projects)
 
 
+# --- Scan Index ---
+
+
+def _scan_summary(scan):
+    """Extract lightweight summary from a full scan for the index."""
+    return {
+        "id": scan["id"],
+        "projectId": scan["projectId"],
+        "projectName": scan.get("projectName", ""),
+        "created": scan["created"],
+        "modules": scan["modules"],
+        "stats": scan["stats"],
+    }
+
+
+def _read_index():
+    """Read the scan index, rebuilding from scan files if missing."""
+    idx = _read_json(_index_path())
+    if idx is not None:
+        return idx
+    return _rebuild_index()
+
+
+def _rebuild_index():
+    """Rebuild index from existing scan files. Called once on migration."""
+    index = []
+    scans_dir = _scans_dir()
+    for f in sorted(scans_dir.glob("*.json"), reverse=True):
+        if f.name == "index.json":
+            continue
+        data = _read_json(f)
+        if data:
+            index.append(_scan_summary(data))
+    _write_json(_index_path(), index)
+    return index
+
+
+def _update_index(summary):
+    """Add a scan summary to the index."""
+    index = _read_index()
+    index.insert(0, summary)
+    _write_json(_index_path(), index)
+
+
+def _remove_from_index(scan_id):
+    """Remove a scan from the index."""
+    index = _read_index()
+    index = [s for s in index if s["id"] != scan_id]
+    _write_json(_index_path(), index)
+
+
 # --- Scans ---
 
 
 def create_scan(project_id):
+    """Blocking scan — used by tests and backward compat."""
     project = get_project(project_id)
     if not project:
         return None
 
     result = scan_project(project["path"])
+    return create_scan_from_results(
+        project_id,
+        project["name"],
+        project["path"],
+        result["modules"],
+        result["failures"],
+    )
 
-    scan_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+def create_scan_from_results(project_id, project_name, project_path, modules, failures):
+    """Create and persist a scan from pre-computed results. Called by scan_jobs."""
+    scan_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
     scan = {
         "id": scan_id,
         "projectId": project_id,
-        "projectName": project["name"],
-        "projectPath": project["path"],
+        "projectName": project_name,
+        "projectPath": project_path,
         "created": datetime.now(timezone.utc).isoformat(),
-        "modules": result["modules"],
-        "failures": result["failures"],
-        "stats": _compute_stats(result["failures"]),
+        "modules": modules,
+        "failures": failures,
+        "stats": _compute_stats(failures),
     }
 
     with _lock:
         _write_json(_scan_path(scan_id), scan)
+        _update_index(_scan_summary(scan))
 
     return scan
 
 
 def list_scans():
-    scans = []
-    scans_dir = _scans_dir()
-    for f in sorted(scans_dir.glob("*.json"), reverse=True):
-        data = _read_json(f)
-        if data:
-            scans.append(
-                {
-                    "id": data["id"],
-                    "projectId": data["projectId"],
-                    "projectName": data.get("projectName", ""),
-                    "created": data["created"],
-                    "modules": data["modules"],
-                    "stats": data["stats"],
-                }
-            )
-    return scans
+    with _lock:
+        return _read_index()
 
 
 def get_scan(scan_id, page=0, size=50, status=None, query=None, module=None):
@@ -138,7 +192,6 @@ def get_scan(scan_id, page=0, size=50, status=None, query=None, module=None):
 
     failures = scan["failures"]
 
-    # Filter
     if status and status != "all":
         failures = [f for f in failures if f["status"] == status]
     if module:
@@ -155,11 +208,8 @@ def get_scan(scan_id, page=0, size=50, status=None, query=None, module=None):
         ]
 
     total_filtered = len(failures)
-
-    # Paginate
     start = page * size
-    end = start + size
-    page_failures = failures[start:end]
+    page_failures = failures[start : start + size]
 
     return {
         "id": scan["id"],
@@ -177,10 +227,11 @@ def get_scan(scan_id, page=0, size=50, status=None, query=None, module=None):
 
 
 def delete_scan(scan_id):
-    path = _scan_path(scan_id)
     with _lock:
+        path = _scan_path(scan_id)
         if path.is_file():
             path.unlink()
+        _remove_from_index(scan_id)
 
 
 def update_failure_status(scan_id, filename, status):
