@@ -5,14 +5,17 @@
 
 ## Intent
 
-Build a system to visualize and review Paparazzi screenshot test failures at scale. Supports thousands of failures with efficient grid browsing, three-pane comparison (golden/delta/actual), keyboard-driven accept/reject workflow, and smart stale failure detection.
+Build a system to visualize Paparazzi screenshot test failures at scale. Supports thousands of failures with efficient grid browsing, three view modes for comparing golden vs actual images, Google Maps-style zoom/pan, and smart stale failure detection via mtime clustering.
 
 ### Prompts summary
 
 1. Build a system to visualize paparazzi screenshot failures, make it efficient with nice UI
 2. Add directory scanning for Gradle project root, detect current vs stale failures via mtime clustering
-3. Review workflow: track accept/reject status only (user runs recordPaparazzi themselves)
-4. Group failures by module in sidebar tree
+3. Group failures by module in sidebar tree
+4. Detail view with 3 modes: Delta full-screen, Toggle (T to swap golden/actual), Slider (drag handle)
+5. Google Maps-style zoom (scroll toward cursor) and drag-to-pan, min zoom is fit-center
+6. Remove accept/reject UI (viewer only for now)
+7. Stick figure test fixture images for realistic screenshot tests
 
 ## Changes
 
@@ -29,40 +32,46 @@ Build a system to visualize and review Paparazzi screenshot test failures at sca
 ### `server/projects.py` (NEW)
 - Project CRUD: add/list/delete projects with JSON persistence in `data/projects.json`
 - Scan creation: orchestrates scanner, stores results in `data/scans/{id}.json`
-- Failure status management: individual and batch accept/reject updates
-- Paginated, filtered failure queries (by status, module, search text)
+- Paginated failure queries (by module, search text)
 - Thread-safe read-modify-write with `threading.Lock`
 
 ### `server/handler.py` (MODIFIED)
 - Added `do_POST`, `do_PUT`, `do_DELETE` methods
-- Full REST API: projects CRUD, scan creation, failure status updates, batch operations
+- Full REST API: projects CRUD, scan creation, image serving
 - Image serving from project directories with path validation (only registered project paths)
+- Cache-Control: no-cache for development
 
 ### `static/index.html` (MODIFIED)
 - Converted to SPA shell: header + content div + script/CSS loading
 
 ### `static/css/app.css` (NEW)
-- Complete styling: light theme with CSS variables, grid layout, sidebar tree, status badges, detail view, progress bars
+- Light theme with CSS variables (`--bg-inset` for image backgrounds)
+- Grid layout, sidebar tree, detail view with fit-to-viewport flex layout
+- Pan/zoom support: absolute positioning with transform-origin, grab cursor
+- Slider mode: clip-path based golden overlay with draggable handle
 
 ### `static/js/api.js` (NEW)
 - Fetch wrappers for GET/POST/PUT/DELETE
+- Shared `escHtml()` and `escAttr()` utilities
 
 ### `static/js/router.js` (NEW)
 - Hash-based SPA router with cleanup support
 
 ### `static/js/home.js` (NEW)
-- Project list with add/remove, scan button, recent scans with progress bars
+- Project list with add/remove, scan button, recent scans list
 
 ### `static/js/review.js` (NEW)
-- Thumbnail grid with CSS Grid, lazy-loaded images, colored status borders
-- Filter pills (All/Pending/Accepted/Rejected), search input, module sidebar tree
-- Infinite scroll via IntersectionObserver, batch accept all visible
-- Shift+A keyboard shortcut for bulk accept
+- Thumbnail grid with CSS Grid, lazy-loaded images
+- Search input, module sidebar tree with counts
+- Infinite scroll via IntersectionObserver
 
 ### `static/js/detail.js` (NEW)
-- Three-pane comparison: Expected (golden), Delta (diff), Actual
-- Keyboard navigation: a=accept, x=reject, j/arrows=next, k/arrows=prev, esc=back
-- Click-to-zoom on images, status badge updates in-place
+- Three view modes: Delta (1), Toggle (2), Slider (3) — switchable via keyboard or pills
+- Google Maps-style zoom/pan: scroll-wheel zooms toward cursor, drag to pan, double-click zoom
+- Min zoom is fit-center, R key resets
+- Toggle mode: T key swaps golden/actual, preserves zoom/pan state
+- Slider mode: draggable handle clips golden image, zoom/pan works behind the handle
+- Keyboard: j/k or arrows for prev/next, Escape back to grid
 
 ### `static/js/app.js` (NEW)
 - Route registration and app initialization
@@ -70,8 +79,10 @@ Build a system to visualize and review Paparazzi screenshot test failures at sca
 ### `.dockerignore` (NEW)
 - Excludes data/, node_modules/, test artifacts, .git from Docker builds
 
-### `tests/screenshots/hello.spec.js` (MODIFIED)
-- Updated tests for new home page: empty state and add project form toggle
+### Tests
+- 16 Python unit tests: filename parser (10 cases) + scanner (6 cases: stale filtering, module discovery)
+- 6 Playwright screenshot tests: home empty/add-project, review grid, detail delta/toggle/slider
+- Stick figure fixture images (golden with arms out, actual with arms raised, delta with red diff)
 
 ## Files modified
 
@@ -79,17 +90,20 @@ Build a system to visualize and review Paparazzi screenshot test failures at sca
 |------|--------|
 | `server/filename_parser.py` | Paparazzi filename parser |
 | `server/scanner.py` | Filesystem scanner with stale detection |
-| `server/projects.py` | Project/scan CRUD and status management |
-| `server/handler.py` | Full REST API routing |
+| `server/projects.py` | Project/scan CRUD |
+| `server/handler.py` | Full REST API routing + image serving |
 | `static/index.html` | SPA shell |
-| `static/css/app.css` | Complete styling |
-| `static/js/api.js` | API client |
+| `static/css/app.css` | Complete styling with zoom/pan support |
+| `static/js/api.js` | API client + shared escape utilities |
 | `static/js/router.js` | Hash-based SPA router |
 | `static/js/home.js` | Home page |
-| `static/js/review.js` | Review grid page |
-| `static/js/detail.js` | Detail comparison page |
+| `static/js/review.js` | Review grid with sidebar and infinite scroll |
+| `static/js/detail.js` | Detail view with 3 modes + Google Maps zoom/pan |
 | `static/js/app.js` | App entry point |
 | `.dockerignore` | Docker build exclusions |
-| `tests/screenshots/hello.spec.js` | Updated screenshot tests |
-| `tests/screenshots/home-empty.png` | New baseline |
-| `tests/screenshots/home-add-project.png` | New baseline |
+| `.github/workflows/ci.yml` | Added unit tests to CI |
+| `tests/test_filename_parser.py` | Filename parser unit tests |
+| `tests/test_scanner.py` | Scanner unit tests |
+| `tests/screenshots/review.spec.js` | Detail + grid screenshot tests |
+| `tests/screenshots/fixtures.js` | Mock API with stick figure images |
+| `tests/screenshots/fixtures/` | Golden, actual, delta PNG fixtures |
