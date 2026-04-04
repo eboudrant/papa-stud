@@ -14,24 +14,27 @@ const MOCK_SCAN = {
   projectPath: '/tmp/test-app',
   created: '2026-04-03T12:00:00Z',
   modules: [
-    { name: ':app', failures_path: '/tmp/test-app/app/build/paparazzi/failures', golden_path: '/tmp/test-app/app/src/test/snapshots/images', failureCount: 3 }
+    { name: ':libraries:ui:login', failures_path: '/tmp/test-app/libraries/ui/login/build/paparazzi/failures', golden_path: '/tmp/test-app/libraries/ui/login/src/test/snapshots/images', failure_count: 2, snapshot_count: 30 },
+    { name: ':libraries:ui:dashboard', failures_path: null, golden_path: '/tmp/test-app/libraries/ui/dashboard/src/test/snapshots/images', failure_count: 0, snapshot_count: 120 },
+    { name: ':libraries:ui:settings', failures_path: null, golden_path: '/tmp/test-app/libraries/ui/settings/src/test/snapshots/images', failure_count: 0, snapshot_count: 45 },
+    { name: ':app:main', failures_path: '/tmp/test-app/app/main/build/paparazzi/failures', golden_path: '/tmp/test-app/app/main/src/test/snapshots/images', failure_count: 1, snapshot_count: 80 },
   ],
   stats: { total: 3, pending: 2, accepted: 1, rejected: 0 },
   failures: [
     {
-      module: ':app', filename: 'com.example_LoginTest_testLogin.png',
+      module: ':libraries:ui:login', filename: 'com.example_LoginTest_testLogin.png',
       delta_path: '/tmp/fake/delta-login.png', actual_path: '/tmp/fake/login.png', golden_path: '/tmp/fake/golden-login.png',
       package: 'com.example', class_name: 'LoginTest', method: 'testLogin', snapshot_name: null,
-      status: 'accepted', has_golden: true, has_actual: true, mtime: 1712160622.0
+      status: 'pending', has_golden: true, has_actual: true, mtime: 1712160622.0
     },
     {
-      module: ':app', filename: 'com.example_LoginTest_testSignup.png',
+      module: ':libraries:ui:login', filename: 'com.example_LoginTest_testSignup.png',
       delta_path: '/tmp/fake/delta-signup.png', actual_path: '/tmp/fake/signup.png', golden_path: '/tmp/fake/golden-signup.png',
       package: 'com.example', class_name: 'LoginTest', method: 'testSignup', snapshot_name: null,
       status: 'pending', has_golden: true, has_actual: true, mtime: 1712160622.0
     },
     {
-      module: ':app', filename: 'com.example.ui_DashboardTest_testHeader.png',
+      module: ':app:main', filename: 'com.example.ui_DashboardTest_testHeader.png',
       delta_path: '/tmp/fake/delta-header.png', actual_path: '/tmp/fake/header.png', golden_path: '/tmp/fake/golden-header.png',
       package: 'com.example.ui', class_name: 'DashboardTest', method: 'testHeader', snapshot_name: null,
       status: 'pending', has_golden: true, has_actual: true, mtime: 1712160622.0

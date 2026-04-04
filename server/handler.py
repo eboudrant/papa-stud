@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from server import projects
+from server import projects, scan_jobs
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -71,6 +71,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self._send(404, '{"error":"scan not found"}', "application/json")
             else:
                 self._send(404, '{"error":"not found"}', "application/json")
+        elif path.startswith("/api/scan-jobs/"):
+            parts = path.split("/")
+            if len(parts) == 4:
+                job = scan_jobs.get_job(parts[3])
+                if job:
+                    self._json_response(job)
+                else:
+                    self._send(404, '{"error":"job not found"}', "application/json")
+            else:
+                self._send(404, '{"error":"not found"}', "application/json")
         elif path == "/api/images":
             file_path = qs.get("path", [None])[0]
             if not file_path:
@@ -105,11 +115,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
             parts = path.split("/")
             if len(parts) == 5:
                 project_id = parts[3]
-                scan = projects.create_scan(project_id)
-                if scan:
-                    self._json_response(scan, 201)
+                project = projects.get_project(project_id)
+                if project:
+                    job_id = scan_jobs.start_scan(
+                        project_id, project["name"], project["path"]
+                    )
+                    self._json_response({"jobId": job_id}, 202)
                 else:
                     self._send(404, '{"error":"project not found"}', "application/json")
+            else:
+                self._send(404, '{"error":"not found"}', "application/json")
+        elif path.startswith("/api/scan-jobs/") and path.endswith("/cancel"):
+            parts = path.split("/")
+            if len(parts) == 5:
+                if scan_jobs.cancel_job(parts[3]):
+                    self._json_response({"cancelled": True})
+                else:
+                    self._send(404, '{"error":"job not found"}', "application/json")
             else:
                 self._send(404, '{"error":"not found"}', "application/json")
         else:
