@@ -44,8 +44,8 @@ function _renderProjects(projectsList) {
   el.innerHTML = projectsList.map(p => `
     <div class="card">
       <div class="card-body">
-        <div class="card-title">${_esc(p.name)}</div>
-        <div class="card-subtitle">${_esc(p.path)}</div>
+        <div class="card-title">${escHtml(p.name)}</div>
+        <div class="card-subtitle">${escHtml(p.path)}</div>
       </div>
       <div class="card-actions">
         <button class="btn btn-primary" onclick="_scanProject('${p.id}', this)">Scan</button>
@@ -65,7 +65,7 @@ function _renderScans(scansList) {
     return `
       <a class="card card-link" href="#/scans/${s.id}">
         <div class="card-body">
-          <div class="card-title">${_esc(s.projectName)} <span class="card-date">${_formatDate(s.created)}</span></div>
+          <div class="card-title">${escHtml(s.projectName)} <span class="card-date">${_formatDate(s.created)}</span></div>
           <div class="card-subtitle">${s.stats.total} failures across ${s.modules.length} module(s)</div>
         </div>
       </a>
@@ -111,11 +111,6 @@ async function _scanProject(id, btn) {
   }
 }
 
-function _esc(str) {
-  const d = document.createElement('div');
-  d.textContent = str || '';
-  return d.innerHTML;
-}
 
 function _formatDate(iso) {
   const d = new Date(iso);

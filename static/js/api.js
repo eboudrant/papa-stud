@@ -43,3 +43,15 @@ async function apiDelete(url) {
   const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok) throw new Error(`DELETE ${url}: ${res.status}`);
 }
+
+/** Escape a string for safe HTML insertion. */
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+/** Escape a string for use in HTML attributes. */
+function escAttr(str) {
+  return escHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}

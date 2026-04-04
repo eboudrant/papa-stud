@@ -1,4 +1,11 @@
 // @ts-check
+const fs = require('fs');
+const path = require('path');
+
+const FIXTURE_DIR = path.join(__dirname, 'fixtures');
+const GOLDEN_PNG = fs.readFileSync(path.join(FIXTURE_DIR, 'golden.png'));
+const ACTUAL_PNG = fs.readFileSync(path.join(FIXTURE_DIR, 'actual.png'));
+const DELTA_PNG = fs.readFileSync(path.join(FIXTURE_DIR, 'delta.png'));
 
 const MOCK_SCAN = {
   id: '20260403-120000',
@@ -51,11 +58,6 @@ const MOCK_PROJECTS = [{
   added: '2026-04-03T10:00:00Z',
 }];
 
-// 1x1 colored PNGs for image placeholders
-const BLUE_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==', 'base64');
-const RED_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8D4HwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
-const GRAY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNgYPgPAAEEAQBwIGkKAAAAAElFTkSuQmCC', 'base64');
-
 /**
  * Mock all API routes for screenshot tests.
  * @param {import('@playwright/test').Page} page
@@ -69,20 +71,16 @@ async function mockApi(page) {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SCAN) });
   });
 
-  await page.route(/\/api\/scans\/[^/]+\/failures\/[^/]+\/status/, route => {
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SCAN.stats) });
-  });
-
   await page.route(/\/api\/scans$/, route => {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SCANS_LIST) });
   });
 
   await page.route(/\/api\/images/, route => {
     const url = route.request().url();
-    let body = GRAY_PNG;
-    if (url.includes('golden')) body = BLUE_PNG;
-    else if (url.includes('delta')) body = GRAY_PNG;
-    else body = RED_PNG;
+    let body = DELTA_PNG;
+    if (url.includes('golden')) body = GOLDEN_PNG;
+    else if (url.includes('delta')) body = DELTA_PNG;
+    else body = ACTUAL_PNG;
     route.fulfill({ status: 200, contentType: 'image/png', body });
   });
 }

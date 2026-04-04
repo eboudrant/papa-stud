@@ -7,7 +7,6 @@ let _loading = false;
 let _hasMore = true;
 let _allFailures = [];
 let _observer = null;
-let _activeFilter = 'all';
 let _activeModule = null;
 let _searchQuery = '';
 
@@ -34,7 +33,6 @@ function showReview(scanId) {
   _loading = false;
   _hasMore = true;
   _allFailures = [];
-  _activeFilter = 'all';
   _activeModule = null;
   _searchQuery = '';
 
@@ -58,7 +56,7 @@ function showReview(scanId) {
 async function _loadReviewPage(scanId) {
   _loading = true;
   const params = new URLSearchParams({ page: '0', size: '50' });
-  if (_activeFilter !== 'all') params.set('status', _activeFilter);
+
   if (_activeModule) params.set('module', _activeModule);
   if (_searchQuery) params.set('q', _searchQuery);
 
@@ -77,7 +75,7 @@ async function _loadMoreFailures(scanId) {
   _loading = true;
   _currentPage++;
   const params = new URLSearchParams({ page: String(_currentPage), size: '50' });
-  if (_activeFilter !== 'all') params.set('status', _activeFilter);
+
   if (_activeModule) params.set('module', _activeModule);
   if (_searchQuery) params.set('q', _searchQuery);
 
@@ -93,14 +91,10 @@ async function _loadMoreFailures(scanId) {
 
 function _renderSidebar(data) {
   const sidebar = document.getElementById('sidebar');
-  // Build tree: module > package > class
   const tree = {};
-  // Use full scan stats, not just current page
-  // We need to request all failures for tree building — use modules for now
   for (const mod of data.modules) {
     tree[mod.name] = { count: mod.failure_count || mod.failureCount, packages: {} };
   }
-  // Build from current failures for package/class breakdown
   for (const f of _allFailures) {
     if (!tree[f.module]) tree[f.module] = { count: 0, packages: {} };
     const pkg = f.package || '(default)';
@@ -115,12 +109,12 @@ function _renderSidebar(data) {
   html += `<div class="tree-item ${!_activeModule ? 'active' : ''}" onclick="_filterModule(null)">All (${data.stats.total})</div>`;
 
   for (const [mod, mdata] of Object.entries(tree)) {
-    html += `<div class="tree-item tree-module ${_activeModule === mod ? 'active' : ''}" onclick="_filterModule('${_escAttr(mod)}')">${_escHtml(mod)} (${mdata.count})</div>`;
+    html += `<div class="tree-item tree-module ${_activeModule === mod ? 'active' : ''}" onclick="_filterModule('${escAttr(mod)}')">${escHtml(mod)} (${mdata.count})</div>`;
     if (_activeModule === mod) {
       for (const [pkg, pdata] of Object.entries(mdata.packages)) {
-        html += `<div class="tree-item tree-package">${_escHtml(pkg)} (${pdata.count})</div>`;
+        html += `<div class="tree-item tree-package">${escHtml(pkg)} (${pdata.count})</div>`;
         for (const [cls, count] of Object.entries(pdata.classes)) {
-          html += `<div class="tree-item tree-class">${_escHtml(cls)} (${count})</div>`;
+          html += `<div class="tree-item tree-class">${escHtml(cls)} (${count})</div>`;
         }
       }
     }
@@ -147,11 +141,11 @@ function _appendGrid(failures) {
     const imgSrc = f.delta_path ? `/api/images?path=${encodeURIComponent(f.delta_path)}` : '';
     card.innerHTML = `
       <div class="thumb-img-wrap">
-        ${imgSrc ? `<img loading="lazy" src="${imgSrc}" alt="${_escAttr(f.filename)}" width="280" height="180">` : '<div class="thumb-placeholder">No delta</div>'}
+        ${imgSrc ? `<img loading="lazy" src="${imgSrc}" alt="${escAttr(f.filename)}" width="280" height="180">` : '<div class="thumb-placeholder">No delta</div>'}
       </div>
       <div class="thumb-info">
-        <span class="thumb-name" title="${_escAttr(f.filename)}">${_escHtml(f.class_name || f.filename)}</span>
-        <span class="thumb-method">${_escHtml(f.method || '')}</span>
+        <span class="thumb-name" title="${escAttr(f.filename)}">${escHtml(f.class_name || f.filename)}</span>
+        <span class="thumb-method">${escHtml(f.method || '')}</span>
       </div>
     `;
     grid.appendChild(card);
@@ -187,12 +181,3 @@ function _resetAndReload() {
 }
 
 
-function _escHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str || '';
-  return d.innerHTML;
-}
-
-function _escAttr(str) {
-  return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
