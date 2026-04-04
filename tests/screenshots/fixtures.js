@@ -87,19 +87,4 @@ async function mockApi(page) {
   });
 }
 
-/**
- * Mock scan endpoint with filtered pending results.
- * @param {import('@playwright/test').Page} page
- */
-async function mockPendingFilter(page) {
-  const filtered = {
-    ...MOCK_SCAN,
-    failures: MOCK_SCAN.failures.filter(f => f.status === 'pending'),
-    totalFiltered: 2,
-  };
-  await page.route(/\/api\/scans\/[^/]+\?.*status=pending/, route => {
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(filtered) });
-  });
-}
-
-module.exports = { MOCK_SCAN, MOCK_SCANS_LIST, MOCK_PROJECTS, mockApi, mockPendingFilter };
+module.exports = { MOCK_SCAN, MOCK_SCANS_LIST, MOCK_PROJECTS, mockApi };

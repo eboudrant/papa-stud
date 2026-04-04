@@ -15,8 +15,6 @@ function showDetail(scanId, filename) {
   const _keyHandler = (e) => {
     if (e.target.tagName === 'INPUT') return;
     switch (e.key) {
-      case 'a': _detailAccept(scanId); break;
-      case 'x': _detailReject(scanId); break;
       case 'ArrowRight': case 'j': _detailNext(scanId); break;
       case 'ArrowLeft': case 'k': _detailPrev(scanId); break;
       case 'Escape': navigate(`/scans/${scanId}`); break;
@@ -81,36 +79,12 @@ function _renderDetail(scanId) {
           ${actualSrc ? `<img src="${actualSrc}" onclick="_toggleZoom(this)">` : '<div class="pane-empty">No actual image</div>'}
         </div>
       </div>
-      <div class="detail-actions">
-        <button class="btn btn-accept" onclick="_detailAccept('${scanId}')">Accept (a)</button>
-        <span class="badge badge-${f.status} badge-lg">${f.status}</span>
-        <button class="btn btn-reject" onclick="_detailReject('${scanId}')">Reject (x)</button>
-      </div>
       <div class="detail-filename">${_dEsc(f.filename)}</div>
-      <div class="detail-shortcuts">Keyboard: a=accept  x=reject  j/&rarr;=next  k/&larr;=prev  esc=back</div>
+      <div class="detail-shortcuts">Keyboard: j/&rarr;=next  k/&larr;=prev  esc=back</div>
     </div>
   `;
 }
 
-async function _detailAccept(scanId) {
-  if (!_detailFailure) return;
-  const stats = await apiPut(
-    `/api/scans/${scanId}/failures/${encodeURIComponent(_detailFailure.filename)}/status`,
-    { status: 'accepted' }
-  );
-  _detailFailure.status = 'accepted';
-  _renderDetail(scanId);
-}
-
-async function _detailReject(scanId) {
-  if (!_detailFailure) return;
-  const stats = await apiPut(
-    `/api/scans/${scanId}/failures/${encodeURIComponent(_detailFailure.filename)}/status`,
-    { status: 'rejected' }
-  );
-  _detailFailure.status = 'rejected';
-  _renderDetail(scanId);
-}
 
 function _detailNext(scanId) {
   if (_detailIndex < _detailFailures.length - 1) {

@@ -18,16 +18,9 @@ function showReview(scanId) {
       <aside class="sidebar" id="sidebar"></aside>
       <div class="review-main">
         <div class="review-toolbar">
-          <div class="filter-pills">
-            <button class="pill active" data-filter="all" onclick="_setFilter('all', this)">All</button>
-            <button class="pill" data-filter="pending" onclick="_setFilter('pending', this)">Pending</button>
-            <button class="pill" data-filter="accepted" onclick="_setFilter('accepted', this)">Accepted</button>
-            <button class="pill" data-filter="rejected" onclick="_setFilter('rejected', this)">Rejected</button>
-          </div>
           <input type="text" class="input search-input" placeholder="Search tests..." oninput="_onSearch(this.value)">
           <div class="toolbar-actions">
             <span id="review-counter" class="counter"></span>
-            <button class="btn btn-sm" onclick="_batchAcceptVisible()">Accept all visible</button>
           </div>
         </div>
         <div class="thumbnail-grid" id="thumbnail-grid"></div>
@@ -56,19 +49,8 @@ function showReview(scanId) {
   });
   _observer.observe(sentinel);
 
-  // Keyboard
-  const _keyHandler = (e) => {
-    if (e.target.tagName === 'INPUT') return;
-    if (e.key === 'A' && e.shiftKey) {
-      e.preventDefault();
-      _batchAcceptVisible();
-    }
-  };
-  document.addEventListener('keydown', _keyHandler);
-
   // Return cleanup
   return () => {
-    document.removeEventListener('keydown', _keyHandler);
     if (_observer) _observer.disconnect();
   };
 }
@@ -159,7 +141,7 @@ function _appendGrid(failures) {
 
   for (const f of failures) {
     const card = document.createElement('a');
-    card.className = `thumb-card status-${f.status}`;
+    card.className = 'thumb-card';
     card.href = `#/scans/${scanId}/review/${encodeURIComponent(f.filename)}`;
 
     const imgSrc = f.delta_path ? `/api/images?path=${encodeURIComponent(f.delta_path)}` : '';
@@ -170,7 +152,6 @@ function _appendGrid(failures) {
       <div class="thumb-info">
         <span class="thumb-name" title="${_escAttr(f.filename)}">${_escHtml(f.class_name || f.filename)}</span>
         <span class="thumb-method">${_escHtml(f.method || '')}</span>
-        <span class="badge badge-${f.status}">${f.status}</span>
       </div>
     `;
     grid.appendChild(card);
@@ -180,16 +161,7 @@ function _appendGrid(failures) {
 function _updateCounter() {
   const el = document.getElementById('review-counter');
   if (!_scanData) return;
-  const s = _scanData.stats;
-  const reviewed = s.accepted + s.rejected;
-  el.textContent = `${reviewed} / ${s.total} reviewed`;
-}
-
-function _setFilter(filter, btn) {
-  _activeFilter = filter;
-  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  _resetAndReload();
+  el.textContent = `${_scanData.stats.total} failures`;
 }
 
 function _filterModule(mod) {
@@ -214,22 +186,6 @@ function _resetAndReload() {
   if (scanId) _loadReviewPage(scanId);
 }
 
-async function _batchAcceptVisible() {
-  if (!_scanData || !_allFailures.length) return;
-  const pending = _allFailures.filter(f => f.status === 'pending');
-  if (!pending.length) return;
-  const filenames = pending.map(f => f.filename);
-  const stats = await apiPut(`/api/scans/${_scanData.id}/failures/batch`, {
-    status: 'accepted',
-    filenames,
-  });
-  if (stats) {
-    _scanData.stats = stats;
-    pending.forEach(f => f.status = 'accepted');
-    _renderGrid();
-    _updateCounter();
-  }
-}
 
 function _escHtml(str) {
   const d = document.createElement('div');

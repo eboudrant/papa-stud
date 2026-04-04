@@ -62,20 +62,11 @@ function _renderScans(scansList) {
     return;
   }
   el.innerHTML = scansList.map(s => {
-    const pct = s.stats.total > 0
-      ? Math.round(((s.stats.accepted + s.stats.rejected) / s.stats.total) * 100)
-      : 0;
-    const modules = s.modules.map(m => m.name).join(', ');
     return `
       <a class="card card-link" href="#/scans/${s.id}">
         <div class="card-body">
           <div class="card-title">${_esc(s.projectName)} <span class="card-date">${_formatDate(s.created)}</span></div>
           <div class="card-subtitle">${s.stats.total} failures across ${s.modules.length} module(s)</div>
-          <div class="progress-bar">
-            <div class="progress-accepted" style="width:${s.stats.total ? (s.stats.accepted / s.stats.total * 100) : 0}%"></div>
-            <div class="progress-rejected" style="width:${s.stats.total ? (s.stats.rejected / s.stats.total * 100) : 0}%"></div>
-          </div>
-          <div class="card-meta">${pct}% reviewed &middot; ${s.stats.accepted} accepted &middot; ${s.stats.rejected} rejected &middot; ${s.stats.pending} pending</div>
         </div>
       </a>
     `;
