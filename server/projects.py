@@ -28,8 +28,17 @@ def _scans_dir():
     return d
 
 
+def _safe_id(value):
+    """Sanitize an ID to prevent path traversal. Only allows alphanumeric, dash, underscore."""
+    import re
+
+    if not re.match(r"^[\w-]+$", value):
+        raise ValueError(f"Invalid ID: {value}")
+    return value
+
+
 def _scan_path(scan_id):
-    return _scans_dir() / f"{scan_id}.json"
+    return _scans_dir() / f"{_safe_id(scan_id)}.json"
 
 
 def _index_path():
@@ -37,6 +46,9 @@ def _index_path():
 
 
 def _read_json(path):
+    path = Path(path).resolve()
+    if not path.is_relative_to(DATA_DIR.resolve()):
+        return None
     if not path.is_file():
         return None
     with open(path) as f:
@@ -44,6 +56,9 @@ def _read_json(path):
 
 
 def _write_json(path, data):
+    path = Path(path).resolve()
+    if not path.is_relative_to(DATA_DIR.resolve()):
+        raise ValueError(f"Path outside data dir: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     with open(tmp, "w") as f:
@@ -332,11 +347,11 @@ def batch_update_status(scan_id, filenames, status):
 
 
 def is_path_under_project(file_path):
-    """Validate that a file path is under a registered project directory."""
-    projects = list_projects()
+    """Validate that a resolved file path is under a registered project directory."""
     resolved = Path(file_path).resolve()
-    for p in projects:
-        if resolved.is_relative_to(Path(p["path"]).resolve()):
+    for p in list_projects():
+        project_root = Path(p["path"]).resolve()
+        if resolved.is_relative_to(project_root):
             return True
     return False
 
