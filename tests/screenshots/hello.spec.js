@@ -19,9 +19,14 @@ test('add project form toggles', async ({ page }) => {
 });
 
 test('home page shows scans with snapshot bars', async ({ page }) => {
+  // Freeze time so relative timestamps are deterministic
+  await page.addInitScript(() => {
+    const fixed = new Date('2026-04-03T13:00:00Z').getTime();
+    Date.now = () => fixed;
+  });
   await mockApi(page);
   await page.goto('/');
   await expect(page.locator('text=3 screenshot failures')).toBeVisible({ timeout: 10000 });
   await expect(page.locator('.scan-test-bar')).toBeVisible();
-  await expect(page).toHaveScreenshot('home-with-scans.png', { maxDiffPixels: 50 });
+  await expect(page).toHaveScreenshot('home-with-scans.png');
 });
