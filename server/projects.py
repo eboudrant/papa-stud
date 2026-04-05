@@ -49,7 +49,7 @@ def _index_path():
 def _read_json(path):
     data_root = os.path.normpath(os.path.realpath(str(DATA_DIR)))
     norm = os.path.normpath(os.path.realpath(str(path)))
-    if not norm.startswith(data_root + os.sep) and norm != data_root:
+    if not norm.startswith(data_root):
         return None
     if not os.path.isfile(norm):
         return None
