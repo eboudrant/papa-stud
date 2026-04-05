@@ -9,6 +9,9 @@ let _allFailures = [];
 let _observer = null;
 let _activeModule = null;
 let _searchQuery = '';
+let _watching = false;
+let _watchPollTimer = null;
+let _lastStatsJson = '';
 
 function showReview(scanId) {
   const content = document.getElementById('content');
@@ -19,6 +22,7 @@ function showReview(scanId) {
         <div class="review-toolbar">
           <input type="text" class="input search-input" placeholder="Search tests..." oninput="_onSearch(this.value)">
           <div class="toolbar-actions">
+            <button class="btn btn-sm watch-btn" id="watch-toggle" onclick="_toggleWatch('${scanId}')">Watch</button>
             <span id="review-counter" class="counter"></span>
           </div>
         </div>
@@ -47,9 +51,13 @@ function showReview(scanId) {
   });
   _observer.observe(sentinel);
 
+  // Check initial watch state
+  _checkWatchState(scanId);
+
   // Return cleanup
   return () => {
     if (_observer) _observer.disconnect();
+    _stopWatchPoll();
   };
 }
 
@@ -237,4 +245,55 @@ function _resetAndReload() {
   if (scanId) _loadReviewPage(scanId);
 }
 
+// --- Watch mode ---
 
+async function _checkWatchState(scanId) {
+  const resp = await apiGet(`/api/scans/${scanId}/watch`);
+  _watching = resp?.watching || false;
+  _updateWatchUI();
+  if (_watching) _startWatchPoll(scanId);
+}
+
+async function _toggleWatch(scanId) {
+  if (_watching) {
+    await apiDelete(`/api/scans/${scanId}/watch`);
+    _watching = false;
+    _stopWatchPoll();
+  } else {
+    await apiPost(`/api/scans/${scanId}/watch`, {});
+    _watching = true;
+    _lastStatsJson = JSON.stringify(_scanData?.stats);
+    _startWatchPoll(scanId);
+  }
+  _updateWatchUI();
+}
+
+function _updateWatchUI() {
+  const btn = document.getElementById('watch-toggle');
+  if (!btn) return;
+  btn.textContent = _watching ? 'Watching' : 'Watch';
+  btn.classList.toggle('watch-active', _watching);
+}
+
+function _startWatchPoll(scanId) {
+  _stopWatchPoll();
+  _lastStatsJson = JSON.stringify(_scanData?.stats);
+  _watchPollTimer = setInterval(async () => {
+    // Light check: only fetch stats via size=0 to detect changes
+    const check = await apiGet(`/api/scans/${scanId}?page=0&size=0`);
+    if (!check) return;
+    const newStats = JSON.stringify(check.stats);
+    if (newStats !== _lastStatsJson) {
+      _lastStatsJson = newStats;
+      // Stats changed — reload the current view
+      _resetAndReload();
+    }
+  }, 2000);
+}
+
+function _stopWatchPoll() {
+  if (_watchPollTimer) {
+    clearInterval(_watchPollTimer);
+    _watchPollTimer = null;
+  }
+}

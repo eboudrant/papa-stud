@@ -50,14 +50,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
 
         if path == "/api/health":
-            self._json_response({"status": "ok"})
+            from server.watcher import HAS_WATCHDOG
+
+            self._json_response(
+                {"status": "ok", "watchMode": "native" if HAS_WATCHDOG else "polling"}
+            )
         elif path == "/api/projects":
             self._json_response(projects.list_projects())
         elif path == "/api/scans":
             self._json_response(projects.list_scans())
         elif path.startswith("/api/scans/"):
             parts = path.split("/")
-            if len(parts) == 4:
+            if len(parts) == 5 and parts[4] == "watch":
+                scan_id = parts[3]
+                self._json_response({"watching": scan_jobs.is_watching(scan_id)})
+            elif len(parts) == 4:
                 scan_id = parts[3]
                 page = int(qs.get("page", ["0"])[0])
                 size = int(qs.get("size", ["50"])[0])
@@ -123,6 +130,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self._json_response({"jobId": job_id}, 202)
                 else:
                     self._send(404, '{"error":"project not found"}', "application/json")
+            else:
+                self._send(404, '{"error":"not found"}', "application/json")
+        elif path.startswith("/api/scans/") and path.endswith("/watch"):
+            parts = path.split("/")
+            if len(parts) == 5:
+                if scan_jobs.start_watching(parts[3]):
+                    self._json_response({"watching": True})
+                else:
+                    self._send(404, '{"error":"scan not found"}', "application/json")
             else:
                 self._send(404, '{"error":"not found"}', "application/json")
         elif path.startswith("/api/scan-jobs/") and path.endswith("/cancel"):
@@ -200,7 +216,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith("/api/scans/"):
             parts = path.split("/")
+            if len(parts) == 5 and parts[4] == "watch":
+                scan_jobs.stop_watching(parts[3])
+                self._json_response({"watching": False})
+                return
             if len(parts) == 4:
+                scan_jobs.stop_watching(parts[3])
                 projects.delete_scan(parts[3])
                 self._send(204, "")
                 return

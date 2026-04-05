@@ -4,6 +4,9 @@ RUN groupadd -r papastud && useradd -r -g papastud -d /app papastud
 
 WORKDIR /app
 
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY server/ server/
 COPY static/ static/
 COPY server.py .
