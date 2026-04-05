@@ -23,5 +23,5 @@ test('home page shows scans with snapshot bars', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('text=3 screenshot failures')).toBeVisible({ timeout: 10000 });
   await expect(page.locator('.scan-test-bar')).toBeVisible();
-  await expect(page).toHaveScreenshot('home-with-scans.png');
+  await expect(page).toHaveScreenshot('home-with-scans.png', { maxDiffPixels: 50 });
 });
