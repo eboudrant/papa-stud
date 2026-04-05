@@ -88,7 +88,7 @@ function _renderScans(scansList) {
           <div class="card-title">
             ${escHtml(s.projectName)}
             <span class="card-date" title="${_formatDate(s.created)}">${_relativeTime(s.created)} &middot; ${_formatDate(s.created)}</span>
-            ${isClean ? '<span class="label-clean">clean</span>' : ''}
+            ${isClean ? '<span class="label-clean">clean</span>' : `<span class="label-failed">${s.stats.total} failed</span>`}
           </div>
           <div class="card-subtitle">
             ${isClean ? 'No screenshot failures' : s.stats.total + ' screenshot failures'} across ${moduleCount} module(s)
