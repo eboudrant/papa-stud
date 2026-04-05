@@ -6,14 +6,16 @@ let _detailFailure = null;
 let _detailFailures = [];
 let _detailIndex = -1;
 let _viewMode = 'delta'; // 'delta' | 'toggle' | 'slider'
+let _keepZoom = false; // preserve zoom on prev/next navigation
 let _toggleShowing = 'golden'; // 'golden' | 'actual'
 
 function showDetail(scanId, filename) {
   const content = document.getElementById('content');
   content.innerHTML = '<div class="detail-loading">Loading...</div>';
 
-  _viewMode = 'delta';
-  _toggleShowing = 'golden';
+  // Preserve view mode when navigating between failures
+  if (!_viewMode) _viewMode = 'delta';
+  if (!_toggleShowing) _toggleShowing = 'golden';
   _loadDetail(scanId, filename);
 
   const _heldKeys = new Set();
@@ -80,7 +82,9 @@ function showDetail(scanId, filename) {
       case 'e': case 'E': _cycleViewMode(scanId); break;
       case '0': case 'r': case 'R': _zoomReset(); break;
       case 't': case 'T':
-        if (_viewMode === 'toggle') {
+        if (_viewMode !== 'toggle') {
+          _setViewMode('toggle', scanId);
+        } else {
           const saved = { ..._panZoom };
           const savedFit = _fitScale;
           _toggleShowing = _toggleShowing === 'golden' ? 'actual' : 'golden';
@@ -124,8 +128,15 @@ async function _loadDetail(scanId, filename) {
   }
 
   _renderDetail(scanId);
-  _initPanZoom();
-  if (_viewMode === 'slider') _initSliderDrag();
+  if (_viewMode === 'slider') {
+    _initSliderDrag();
+  } else if (_keepZoom) {
+    _applyPanZoom();
+    _initPanZoom(true);
+  } else {
+    _initPanZoom();
+  }
+  _keepZoom = false;
 }
 
 function _renderDetail(scanId) {
@@ -146,7 +157,29 @@ function _renderDetail(scanId) {
       <span id="zoom-level">Fit</span>
       <button onclick="_zoomIn()">+</button>
       <button onclick="_zoomReset()">R</button>
+      <span id="size-warning" class="size-warning" style="display:none"></span>
     </div>`;
+
+  // Check image size mismatch after render (for toggle/slider)
+  if (goldenSrc && effectiveActual && _viewMode !== 'delta') {
+    const gImg = new Image();
+    const aImg = new Image();
+    let loaded = 0;
+    const checkSizes = () => {
+      if (++loaded < 2) return;
+      const warn = document.getElementById('size-warning');
+      if (gImg.naturalWidth !== aImg.naturalWidth || gImg.naturalHeight !== aImg.naturalHeight) {
+        if (warn) {
+          warn.textContent = `Size mismatch: golden ${gImg.naturalWidth}x${gImg.naturalHeight} vs actual ${aImg.naturalWidth}x${aImg.naturalHeight}`;
+          warn.style.display = '';
+        }
+      }
+    };
+    gImg.onload = checkSizes;
+    aImg.onload = checkSizes;
+    gImg.src = goldenSrc;
+    aImg.src = effectiveActual;
+  }
 
   if (_viewMode === 'delta') {
     viewContent = deltaSrc
@@ -159,9 +192,9 @@ function _renderDetail(scanId) {
     const src = _toggleShowing === 'golden' ? goldenSrc : effectiveActual;
     const goldenFile = f.golden_path ? f.golden_path.split('/').pop() : '';
     const actualFile = f.actual_path ? f.actual_path.split('/').pop() : f.delta_path ? f.delta_path.split('/').pop() : '';
-    const label = _toggleShowing === 'golden'
-      ? `Expected (Golden)${goldenFile ? ' — ' + escHtml(goldenFile) : ''}`
-      : `${actualSrc ? 'Actual' : 'Delta'}${actualFile ? ' — ' + escHtml(actualFile) : ''}`;
+    const title = _toggleShowing === 'golden' ? 'Expected (Golden)' : (actualSrc ? 'Actual' : 'Delta');
+    const file = _toggleShowing === 'golden' ? goldenFile : actualFile;
+    const label = `${title}${file ? '<br><span class="toggle-file">' + escHtml(file) + '</span>' : ''}`;
     viewContent = src
       ? `<div class="detail-fullview">
           <div class="detail-view-area" id="view-area">
@@ -174,9 +207,9 @@ function _renderDetail(scanId) {
   } else if (_viewMode === 'slider') {
     viewContent = (goldenSrc && actualSrc)
       ? `<div class="detail-fullview">
-          <div class="detail-view-area" id="view-area">
-            <img src="${actualSrc}" id="detail-img">
-            <img src="${goldenSrc}" id="slider-golden">
+          <div class="slider-viewport" id="slider-viewport">
+            <img src="${actualSrc}" class="slider-base" id="slider-actual">
+            <img src="${goldenSrc}" class="slider-base" id="slider-golden">
             <div class="slider-handle" id="slider-handle" style="left:50%"></div>
           </div>
           <div class="slider-labels">
@@ -226,8 +259,8 @@ function _setViewMode(mode, scanId) {
   _sliderDragging = false;
   if (mode === 'toggle') _toggleShowing = 'golden';
   _renderDetail(scanId);
-  _initPanZoom();
   if (mode === 'slider') _initSliderDrag();
+  else _initPanZoom();
 }
 
 let _sliderDragging = false;
@@ -235,15 +268,30 @@ let _sliderPct = 50;
 
 function _initSliderDrag() {
   const handle = document.getElementById('slider-handle');
-  const area = document.getElementById('view-area');
-  if (!handle || !area) return;
+  const viewport = document.getElementById('slider-viewport');
+  if (!handle || !viewport) return;
   _sliderPct = 50;
+
+  // Wait for both images to load, then size the viewport and set initial clip
+  const actual = document.getElementById('slider-actual');
+  const golden = document.getElementById('slider-golden');
+  let loaded = 0;
+  const onLoad = () => {
+    if (++loaded < 2) return;
+    // Use the max dimensions so both images fit in the same space
+    const w = Math.max(actual.naturalWidth, golden.naturalWidth);
+    const h = Math.max(actual.naturalHeight, golden.naturalHeight);
+    viewport.style.aspectRatio = `${w} / ${h}`;
+    _updateSliderClip();
+  };
+  if (actual.complete && golden.complete) { loaded = 1; onLoad(); }
+  else { actual.onload = onLoad; golden.onload = onLoad; }
   _updateSliderClip();
 
   const onMove = (e) => {
     e.preventDefault();
     const x = e.touches ? e.touches[0].clientX : e.clientX;
-    const rect = area.getBoundingClientRect();
+    const rect = viewport.getBoundingClientRect();
     _sliderPct = Math.max(0, Math.min(100, ((x - rect.left) / rect.width) * 100));
     handle.style.left = _sliderPct + '%';
     _updateSliderClip();
@@ -273,24 +321,15 @@ function _initSliderDrag() {
 
 function _updateSliderClip() {
   const golden = document.getElementById('slider-golden');
-  const area = document.getElementById('view-area');
-  const img = document.getElementById('detail-img');
-  if (!golden || !area || !img) return;
-
-  // Convert container-space handle X to image-space clip
-  const handleX = (area.clientWidth * _sliderPct) / 100;
-  // Image-space X = (containerX - ox) / scale
-  const imgClipRight = (handleX - _panZoom.ox) / _panZoom.scale;
-  const imgW = img.naturalWidth;
-  // clip-path inset: top right bottom left (in px from each edge)
-  const rightInset = Math.max(0, imgW - imgClipRight);
-  golden.style.clipPath = `inset(0 ${rightInset}px 0 0)`;
+  if (!golden) return;
+  golden.style.clipPath = `inset(0 ${100 - _sliderPct}% 0 0)`;
 }
 
 function _detailNext(scanId) {
   if (_detailIndex < _detailFailures.length - 1) {
     _detailIndex++;
     _detailFailure = _detailFailures[_detailIndex];
+    _keepZoom = true;
     navigate(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
   }
 }
@@ -299,6 +338,7 @@ function _detailPrev(scanId) {
   if (_detailIndex > 0) {
     _detailIndex--;
     _detailFailure = _detailFailures[_detailIndex];
+    _keepZoom = true;
     navigate(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
   }
 }
@@ -498,7 +538,6 @@ function _applyPanZoom() {
   const pct = Math.round(_panZoom.scale * 100);
   const fitPct = Math.round(_fitScale * 100);
   if (label) label.textContent = pct === fitPct ? 'Fit' : pct + '%';
-  if (_viewMode === 'slider') _updateSliderClip();
 }
 
 

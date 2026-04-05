@@ -57,10 +57,17 @@ function showReview(scanId) {
   // Check initial watch state
   _checkWatchState(scanId);
 
+  const _keyHandler = (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'Escape') navigate('/');
+  };
+  document.addEventListener('keydown', _keyHandler);
+
   // Return cleanup
   return () => {
     if (_observer) _observer.disconnect();
     _stopWatchPoll();
+    document.removeEventListener('keydown', _keyHandler);
   };
 }
 

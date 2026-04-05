@@ -94,6 +94,7 @@ header .tag { font-size: 11px; font-weight: 500; color: var(--accent); backgroun
 
 /* Clean scan label */
 .label-clean { font-size: 10px; font-weight: 500; color: #16a34a; background: #dcfce7; padding: 1px 6px; border-radius: 99px; margin-left: 6px; }
+.label-failed { font-size: 10px; font-weight: 500; color: #dc2626; background: #fee2e2; padding: 1px 6px; border-radius: 99px; margin-left: 6px; }
 .scan-clean { opacity: 0.7; }
 
 /* Test stats bar */
@@ -230,12 +231,20 @@ header .tag { font-size: 11px; font-weight: 500; color: var(--accent); backgroun
   pointer-events: none;
 }
 .label-hint { font-weight: 400; text-transform: none; color: var(--text-light); }
+.toggle-file { font-weight: 400; text-transform: none; font-size: 11px; opacity: 0.8; }
+.size-warning { font-size: 11px; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 4px; margin-left: auto; }
 
 /* Slider mode */
+.slider-viewport {
+  flex: 1; min-height: 0; position: relative; overflow: hidden;
+  background: var(--bg-inset); display: flex; align-items: center; justify-content: center;
+}
+.slider-base {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  object-fit: contain; user-select: none; -webkit-user-drag: none;
+}
 #slider-golden {
-  position: absolute; transform-origin: 0 0; display: block;
-  user-select: none; -webkit-user-drag: none;
-  clip-path: inset(0 50% 0 0);
+  clip-path: inset(0 50% 0 0); z-index: 2;
 }
 .slider-handle {
   position: absolute; top: 0; left: 50%; width: 5px; height: 100%;
