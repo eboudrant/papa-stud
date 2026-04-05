@@ -101,20 +101,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._send(400, '{"error":"path required"}', "application/json")
                 return
             norm = os.path.normpath(os.path.realpath(file_path))
-            # Inline project path check so CodeQL sees the sanitizer
-            allowed = False
-            for p in projects.list_projects():
-                root = os.path.normpath(os.path.realpath(p["path"]))
-                if norm.startswith(root):
-                    allowed = True
-                    break
-            if not allowed:
+            safe_roots = [
+                os.path.normpath(os.path.realpath(p["path"]))
+                for p in projects.list_projects()
+            ]
+            if not any(norm.startswith(r + os.sep) for r in safe_roots):
                 self._send(403, '{"error":"forbidden"}', "application/json")
-                return
-            if not os.path.isfile(norm):
+            elif not os.path.isfile(norm):
                 self._send(404, '{"error":"file not found"}', "application/json")
-                return
-            self._serve_file(norm)
+            else:
+                self._serve_file(norm)
         else:
             self._send(404, '{"error":"not found"}', "application/json")
 
