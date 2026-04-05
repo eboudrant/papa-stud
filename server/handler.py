@@ -14,8 +14,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._serve_file(STATIC_DIR / "index.html", "text/html")
         elif self.path.startswith("/static/"):
             rel = self.path[len("/static/") :]
-            file_path = STATIC_DIR / rel
-            if file_path.resolve().is_relative_to(STATIC_DIR) and file_path.is_file():
+            file_path = (STATIC_DIR / rel).resolve()
+            if file_path.is_relative_to(STATIC_DIR.resolve()) and file_path.is_file():
                 self._serve_file(file_path)
             else:
                 self._send(404, "Not found")
@@ -96,12 +96,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not file_path:
                 self._send(400, '{"error":"path required"}', "application/json")
                 return
-            p = Path(file_path)
+            p = Path(file_path).resolve()
+            if not projects.is_path_under_project(str(p)):
+                self._send(403, '{"error":"forbidden"}', "application/json")
+                return
             if not p.is_file():
                 self._send(404, '{"error":"file not found"}', "application/json")
-                return
-            if not projects.is_path_under_project(file_path):
-                self._send(403, '{"error":"forbidden"}', "application/json")
                 return
             self._serve_file(p)
         else:
