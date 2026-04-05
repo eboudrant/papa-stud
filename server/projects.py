@@ -47,9 +47,9 @@ def _index_path():
 
 
 def _read_json(path):
-    norm = os.path.normpath(os.path.realpath(str(path)))
     data_root = os.path.normpath(os.path.realpath(str(DATA_DIR)))
-    if os.path.commonpath([norm, data_root]) != data_root:
+    norm = os.path.normpath(os.path.realpath(str(path)))
+    if not norm.startswith(data_root + os.sep) and norm != data_root:
         return None
     if not os.path.isfile(norm):
         return None
@@ -58,9 +58,9 @@ def _read_json(path):
 
 
 def _write_json(path, data):
-    norm = os.path.normpath(os.path.realpath(str(path)))
     data_root = os.path.normpath(os.path.realpath(str(DATA_DIR)))
-    if os.path.commonpath([norm, data_root]) != data_root:
+    norm = os.path.normpath(os.path.realpath(str(path)))
+    if not norm.startswith(data_root + os.sep):
         raise ValueError(f"Path outside data dir: {norm}")
     os.makedirs(os.path.dirname(norm), exist_ok=True)
     tmp = norm + ".tmp"
@@ -354,7 +354,7 @@ def is_path_under_project(file_path):
     norm = os.path.normpath(os.path.realpath(file_path))
     for p in list_projects():
         project_root = os.path.normpath(os.path.realpath(p["path"]))
-        if os.path.commonpath([norm, project_root]) == project_root:
+        if norm.startswith(project_root + os.sep) or norm == project_root:
             return True
     return False
 

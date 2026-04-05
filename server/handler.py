@@ -15,8 +15,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._serve_file(STATIC_DIR / "index.html", "text/html")
         elif self.path.startswith("/static/"):
             rel = self.path[len("/static/") :]
-            norm = os.path.normpath(os.path.join(str(STATIC_DIR), rel))
-            if os.path.commonpath([norm, str(STATIC_DIR)]) != str(STATIC_DIR):
+            base = os.path.normpath(str(STATIC_DIR))
+            norm = os.path.normpath(os.path.join(base, rel))
+            if not norm.startswith(base):
                 self._send(403, "Forbidden")
             elif os.path.isfile(norm):
                 self._serve_file(norm)
@@ -99,7 +100,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not file_path:
                 self._send(400, '{"error":"path required"}', "application/json")
                 return
-            norm = os.path.normpath(file_path)
+            norm = os.path.normpath(os.path.realpath(file_path))
             if not projects.is_path_under_project(norm):
                 self._send(403, '{"error":"forbidden"}', "application/json")
                 return
