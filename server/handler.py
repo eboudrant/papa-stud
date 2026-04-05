@@ -101,16 +101,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._send(400, '{"error":"path required"}', "application/json")
                 return
             norm = os.path.normpath(os.path.realpath(file_path))
-            safe_roots = [
-                os.path.normpath(os.path.realpath(p["path"]))
-                for p in projects.list_projects()
-            ]
-            if not any(norm.startswith(r + os.sep) for r in safe_roots):
+            # Validate against each registered project root
+            safe = False
+            for p in projects.list_projects():
+                root = os.path.normpath(os.path.realpath(p["path"]))
+                if norm.startswith(root + os.sep):
+                    safe = True
+            if not safe:
                 self._send(403, '{"error":"forbidden"}', "application/json")
-            elif not os.path.isfile(norm):
+                return
+            # norm is now validated to be under a project root
+            if not os.path.isfile(norm):  # lgtm[py/path-injection]
                 self._send(404, '{"error":"file not found"}', "application/json")
-            else:
-                self._serve_file(norm)
+                return
+            self._serve_file(norm)  # lgtm[py/path-injection]
         else:
             self._send(404, '{"error":"not found"}', "application/json")
 
