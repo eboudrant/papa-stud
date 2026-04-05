@@ -114,6 +114,11 @@ header .tag { font-size: 11px; font-weight: 500; color: var(--accent); backgroun
 .toast-error { background: #fee2e2; color: #991b1b; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 
+/* Watch toggle */
+.watch-btn { transition: all 0.2s; }
+.watch-active { background: var(--accent); color: white; border-color: var(--accent); animation: watch-pulse 2s ease-in-out infinite; }
+@keyframes watch-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
 /* Review layout */
 .review-layout { display: flex; min-height: calc(100vh - 49px); }
 .sidebar {

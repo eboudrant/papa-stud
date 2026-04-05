@@ -34,6 +34,68 @@ def scan_project(project_path):
     return result
 
 
+def process_single_module(failures_dir, module_name, module_path):
+    """Process a single Paparazzi module. Returns (module_data, failures_list).
+
+    Reused by both the initial scan and the realtime watcher.
+    """
+    golden_dir = module_path / "src" / "test" / "snapshots" / "images"
+    test_stats, xml_mtime = _parse_junit_xml(module_path)
+
+    module_failures = []
+    if failures_dir and Path(failures_dir).is_dir():
+        failures_dir = Path(failures_dir)
+        current = _detect_current_failures(failures_dir)
+        if xml_mtime > 0 and current and test_stats and test_stats["failed"] == 0:
+            current = [f for f in current if f.stat().st_mtime > xml_mtime]
+
+        if current and golden_dir.is_dir():
+            filtered = []
+            for f in current:
+                golden = golden_dir / base_filename(f.name)
+                if golden.is_file() and golden.stat().st_mtime > f.stat().st_mtime:
+                    continue
+                filtered.append(f)
+            current = filtered
+
+        for delta_path in current:
+            fname = delta_path.name
+            base = base_filename(fname)
+            parsed = parse_filename(base)
+            actual_path = failures_dir / base
+            golden_path = golden_dir / base
+
+            module_failures.append(
+                {
+                    "module": module_name,
+                    "filename": base,
+                    "delta_path": str(delta_path),
+                    "actual_path": str(actual_path) if actual_path.is_file() else None,
+                    "golden_path": str(golden_path) if golden_path.is_file() else None,
+                    "package": parsed["package"],
+                    "class_name": parsed["class_name"],
+                    "method": parsed["method"],
+                    "snapshot_name": parsed["snapshot_name"],
+                    "status": "pending",
+                    "has_golden": golden_path.is_file(),
+                    "has_actual": actual_path.is_file(),
+                    "mtime": delta_path.stat().st_mtime,
+                }
+            )
+
+    snapshot_count = len(list(golden_dir.glob("*.png"))) if golden_dir.is_dir() else 0
+
+    module_data = {
+        "name": module_name,
+        "failures_path": str(failures_dir) if failures_dir else None,
+        "golden_path": str(golden_dir),
+        "failure_count": len(module_failures),
+        "snapshot_count": snapshot_count,
+        "test_stats": test_stats,
+    }
+    return module_data, module_failures
+
+
 def scan_project_incremental(project_path, cancel_event=None):
     """Yield (phase, data) tuples as the scan progresses.
 
@@ -60,75 +122,10 @@ def scan_project_incremental(project_path, cancel_event=None):
             yield ("cancelled", {})
             return
 
-        golden_dir = module_path / "src" / "test" / "snapshots" / "images"
-        test_stats, xml_mtime = _parse_junit_xml(module_path)
-
-        # Process failures if the module has a failures directory
-        module_failures = []
-        if failures_dir:
-            # Filter stale deltas: if XML reports 0 failures and is newer,
-            # a passing run happened after the verify — deltas are leftover.
-            # If XML reports failures > 0, deltas are from the same run.
-            current = _detect_current_failures(failures_dir)
-            if xml_mtime > 0 and current and test_stats and test_stats["failed"] == 0:
-                current = [f for f in current if f.stat().st_mtime > xml_mtime]
-
-            # Also filter deltas whose golden image is newer (recordPaparazzi
-            # updated the golden after the verify that produced the delta)
-            if current and golden_dir.is_dir():
-                filtered = []
-                for f in current:
-                    golden = golden_dir / base_filename(f.name)
-                    if golden.is_file() and golden.stat().st_mtime > f.stat().st_mtime:
-                        continue  # golden is newer — delta is stale
-                    filtered.append(f)
-                current = filtered
-
-            for delta_path in current:
-                fname = delta_path.name
-                base = base_filename(fname)
-                parsed = parse_filename(base)
-                actual_path = failures_dir / base
-                golden_path = golden_dir / base
-
-                module_failures.append(
-                    {
-                        "module": module_name,
-                        "filename": base,
-                        "delta_path": str(delta_path),
-                        "actual_path": str(actual_path)
-                        if actual_path.is_file()
-                        else None,
-                        "golden_path": str(golden_path)
-                        if golden_path.is_file()
-                        else None,
-                        "package": parsed["package"],
-                        "class_name": parsed["class_name"],
-                        "method": parsed["method"],
-                        "snapshot_name": parsed["snapshot_name"],
-                        "status": "pending",
-                        "has_golden": golden_path.is_file(),
-                        "has_actual": actual_path.is_file(),
-                        "mtime": delta_path.stat().st_mtime,
-                    }
-                )
-
-        # Count golden snapshots (= total Paparazzi tests)
-        snapshot_count = (
-            len(list(golden_dir.glob("*.png"))) if golden_dir.is_dir() else 0
+        module_data, module_failures = process_single_module(
+            failures_dir, module_name, module_path
         )
-
-        # Always include modules that have Paparazzi (even if 0 failures)
-        modules.append(
-            {
-                "name": module_name,
-                "failures_path": str(failures_dir) if failures_dir else None,
-                "golden_path": str(golden_dir),
-                "failure_count": len(module_failures),
-                "snapshot_count": snapshot_count,
-                "test_stats": test_stats,
-            }
-        )
+        modules.append(module_data)
         if module_failures:
             failures.extend(module_failures)
 

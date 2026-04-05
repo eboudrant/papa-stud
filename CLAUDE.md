@@ -4,7 +4,7 @@
 
 Self-hosted tool for processing and viewing Paparazzi screenshot test images.
 
-- **Backend:** Python 3.13, stdlib `http.server` (no framework), threaded
+- **Backend:** Python 3.13, stdlib `http.server` (no framework), threaded + watchdog for filesystem watching
 - **Frontend:** Vanilla HTML/CSS/JS, light theme, system fonts — no build step
 - **Docker:** `python:3.13-slim`, non-root `papastud` user, port **8770**
 - **Data volume:** `/app/data` (persistent via `papastud-data` Docker volume)

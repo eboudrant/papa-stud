@@ -234,6 +234,42 @@ def delete_scan(scan_id):
         _remove_from_index(scan_id)
 
 
+def update_scan_module(scan_id, module_name, module_data, module_failures):
+    """Update a single module's data in an existing scan (in-place)."""
+    with _lock:
+        scan = _read_json(_scan_path(scan_id))
+        if not scan:
+            return None
+
+        # Replace or add module entry
+        found = False
+        for i, m in enumerate(scan["modules"]):
+            if m["name"] == module_name:
+                scan["modules"][i] = module_data
+                found = True
+                break
+        if not found:
+            scan["modules"].append(module_data)
+
+        # Replace failures for this module
+        scan["failures"] = [
+            f for f in scan["failures"] if f["module"] != module_name
+        ] + module_failures
+
+        scan["stats"] = _compute_stats(scan["failures"])
+        _write_json(_scan_path(scan_id), scan)
+
+        # Update index
+        idx = _read_index()
+        for i, s in enumerate(idx):
+            if s["id"] == scan_id:
+                idx[i] = _scan_summary(scan)
+                break
+        _write_json(_index_path(), idx)
+
+    return scan["stats"]
+
+
 def update_failure_status(scan_id, filename, status):
     with _lock:
         scan = _read_json(_scan_path(scan_id))

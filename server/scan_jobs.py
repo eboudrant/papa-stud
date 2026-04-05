@@ -8,11 +8,15 @@ import threading
 import time
 import uuid
 
+from pathlib import Path
+
 from server import projects
-from server.scanner import scan_project_incremental
+from server.scanner import process_single_module, scan_project_incremental
+from server.watcher import create_watcher
 
 _jobs = {}
 _lock = threading.Lock()
+_watchers = {}  # scan_id -> ScanWatcher
 
 JOB_TTL = 300  # 5 minutes
 
@@ -125,3 +129,46 @@ def _run_scan(job_id, project_id, name, path, cancel):
         job["status"] = "failed"
         job["error"] = str(e)
         job["_finished_at"] = time.monotonic()
+
+
+# --- Watcher management ---
+
+
+def start_watching(scan_id):
+    """Start watching a scan's module paths for changes."""
+    stop_watching(scan_id)
+    scan = projects.get_scan(scan_id, page=0, size=0)
+    if not scan:
+        return False
+
+    project_path = scan.get("projectPath", "")
+
+    def on_module_change(module_name, module_path):
+        mp = Path(module_path)
+        failures_dir = mp / "build" / "paparazzi" / "failures"
+        if not failures_dir.is_dir():
+            failures_dir = None
+        module_data, module_failures = process_single_module(
+            failures_dir, module_name, mp
+        )
+        projects.update_scan_module(scan_id, module_name, module_data, module_failures)
+
+    watcher = create_watcher(scan["modules"], project_path, on_module_change)
+    watcher.start()
+    with _lock:
+        _watchers[scan_id] = watcher
+    return True
+
+
+def stop_watching(scan_id):
+    """Stop watching a scan."""
+    with _lock:
+        watcher = _watchers.pop(scan_id, None)
+    if watcher:
+        watcher.stop()
+
+
+def is_watching(scan_id):
+    """Check if a scan is being watched."""
+    with _lock:
+        return scan_id in _watchers
