@@ -6,6 +6,7 @@ Uses an index file for fast scan listing.
 """
 
 import json
+import os
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -46,24 +47,26 @@ def _index_path():
 
 
 def _read_json(path):
-    path = Path(path).resolve()
-    if not path.is_relative_to(DATA_DIR.resolve()):
+    norm = os.path.normpath(os.path.realpath(str(path)))
+    data_root = os.path.normpath(os.path.realpath(str(DATA_DIR)))
+    if os.path.commonpath([norm, data_root]) != data_root:
         return None
-    if not path.is_file():
+    if not os.path.isfile(norm):
         return None
-    with open(path) as f:
+    with open(norm) as f:
         return json.load(f)
 
 
 def _write_json(path, data):
-    path = Path(path).resolve()
-    if not path.is_relative_to(DATA_DIR.resolve()):
-        raise ValueError(f"Path outside data dir: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
+    norm = os.path.normpath(os.path.realpath(str(path)))
+    data_root = os.path.normpath(os.path.realpath(str(DATA_DIR)))
+    if os.path.commonpath([norm, data_root]) != data_root:
+        raise ValueError(f"Path outside data dir: {norm}")
+    os.makedirs(os.path.dirname(norm), exist_ok=True)
+    tmp = norm + ".tmp"
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
-    tmp.rename(path)
+    os.rename(tmp, norm)
 
 
 # --- Projects ---
@@ -347,11 +350,11 @@ def batch_update_status(scan_id, filenames, status):
 
 
 def is_path_under_project(file_path):
-    """Validate that a resolved file path is under a registered project directory."""
-    resolved = Path(file_path).resolve()
+    """Validate that a normalized file path is under a registered project directory."""
+    norm = os.path.normpath(os.path.realpath(file_path))
     for p in list_projects():
-        project_root = Path(p["path"]).resolve()
-        if resolved.is_relative_to(project_root):
+        project_root = os.path.normpath(os.path.realpath(p["path"]))
+        if os.path.commonpath([norm, project_root]) == project_root:
             return True
     return False
 
