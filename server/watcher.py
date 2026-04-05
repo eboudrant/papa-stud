@@ -18,17 +18,17 @@ except ImportError:
     HAS_WATCHDOG = False
 
 
-def create_watcher(modules, project_path, on_module_change):
+def create_watcher(modules, project_path, on_module_change, profiles=None):
     """Create the best available watcher. Returns a ScanWatcher."""
     if HAS_WATCHDOG:
-        return _WatchdogWatcher(modules, project_path, on_module_change)
-    return _PollingWatcher(modules, project_path, on_module_change)
+        return _WatchdogWatcher(modules, project_path, on_module_change, profiles)
+    return _PollingWatcher(modules, project_path, on_module_change, profiles)
 
 
 class _BaseWatcher:
     """Shared logic: module path mapping and debounce."""
 
-    def __init__(self, modules, project_path, on_module_change):
+    def __init__(self, modules, project_path, on_module_change, profiles=None):
         self._on_change = on_module_change
         self._timers = {}
         self._lock = threading.Lock()
@@ -40,11 +40,15 @@ class _BaseWatcher:
             parts = module_name.strip(":").split(":")
             module_path = root / Path(*parts) if parts and parts != ["root"] else root
 
-            watch_dirs = [
-                module_path / "build" / "paparazzi" / "failures",
-                module_path / "build" / "test-results",
-                module_path / "src" / "test" / "snapshots" / "images",
-            ]
+            watch_dirs = set()
+            watch_dirs.add(module_path / "build" / "test-results")
+            if profiles:
+                for p in profiles:
+                    watch_dirs.add(module_path / p["failures_dir"])
+                    watch_dirs.add(module_path / p["golden_dir"])
+            else:
+                watch_dirs.add(module_path / "build" / "paparazzi" / "failures")
+                watch_dirs.add(module_path / "src" / "test" / "snapshots" / "images")
 
             for d in watch_dirs:
                 if d.is_dir():
@@ -98,8 +102,8 @@ if HAS_WATCHDOG:
     class _WatchdogWatcher(_BaseWatcher):
         """Instant file watching via watchdog (FSEvents/inotify)."""
 
-        def __init__(self, modules, project_path, on_module_change):
-            super().__init__(modules, project_path, on_module_change)
+        def __init__(self, modules, project_path, on_module_change, profiles=None):
+            super().__init__(modules, project_path, on_module_change, profiles)
             self._observer = Observer()
             for d in self._path_to_module:
                 handler = _WatchdogHandler(self._on_file_change)
@@ -120,8 +124,8 @@ class _PollingWatcher(_BaseWatcher):
 
     POLL_INTERVAL = 2.0
 
-    def __init__(self, modules, project_path, on_module_change):
-        super().__init__(modules, project_path, on_module_change)
+    def __init__(self, modules, project_path, on_module_change, profiles=None):
+        super().__init__(modules, project_path, on_module_change, profiles=profiles)
         self._stop_event = threading.Event()
         self._mtimes = {}
         # Snapshot initial mtimes

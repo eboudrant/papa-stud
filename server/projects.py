@@ -56,7 +56,25 @@ def _write_json(path, data):
 
 def list_projects():
     with _lock:
-        return _read_json(_projects_path()) or []
+        projects = _read_json(_projects_path()) or []
+        migrated = False
+        for p in projects:
+            if "profiles" not in p:
+                p["profiles"] = list(DEFAULT_PROFILES)
+                migrated = True
+        if migrated:
+            _write_json(_projects_path(), projects)
+        return projects
+
+
+DEFAULT_PROFILES = [
+    {
+        "name": "baseline",
+        "failures_dir": "build/paparazzi/failures",
+        "golden_dir": "src/test/snapshots/images",
+        "golden_patterns": ["src/test/snapshots/images/{name}.png"],
+    }
+]
 
 
 def add_project(name, path):
@@ -67,6 +85,7 @@ def add_project(name, path):
             "name": name,
             "path": path,
             "added": datetime.now(timezone.utc).isoformat(),
+            "profiles": list(DEFAULT_PROFILES),
         }
         projects.append(project)
         _write_json(_projects_path(), projects)
@@ -74,11 +93,21 @@ def add_project(name, path):
 
 
 def get_project(project_id):
-    projects = list_projects()
-    for p in projects:
+    for p in list_projects():
         if p["id"] == project_id:
             return p
     return None
+
+
+def update_project_profiles(project_id, profiles):
+    with _lock:
+        projects = _read_json(_projects_path()) or []
+        for p in projects:
+            if p["id"] == project_id:
+                p["profiles"] = profiles
+                break
+        _write_json(_projects_path(), projects)
+    return get_project(project_id)
 
 
 def delete_project(project_id):
@@ -184,7 +213,9 @@ def list_scans():
         return _read_index()
 
 
-def get_scan(scan_id, page=0, size=50, status=None, query=None, module=None):
+def get_scan(
+    scan_id, page=0, size=50, status=None, query=None, module=None, profile=None
+):
     with _lock:
         scan = _read_json(_scan_path(scan_id))
     if not scan:
@@ -196,6 +227,8 @@ def get_scan(scan_id, page=0, size=50, status=None, query=None, module=None):
         failures = [f for f in failures if f["status"] == status]
     if module:
         failures = [f for f in failures if f["module"] == module]
+    if profile:
+        failures = [f for f in failures if f.get("profile") == profile]
     if query:
         q = query.lower()
         failures = [

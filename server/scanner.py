@@ -34,26 +34,125 @@ def scan_project(project_path):
     return result
 
 
-def process_single_module(failures_dir, module_name, module_path):
+def process_single_module(failures_dir, module_name, module_path, profiles=None):
     """Process a single Paparazzi module. Returns (module_data, failures_list).
 
+    If profiles is provided, processes each profile's failure/golden dirs.
+    Otherwise uses the legacy failures_dir with default golden dir.
     Reused by both the initial scan and the realtime watcher.
     """
-    golden_dir = module_path / "src" / "test" / "snapshots" / "images"
     test_stats, xml_mtime = _parse_junit_xml(module_path)
-
     module_failures = []
+    profile_counts = {}
+    total_snapshots = 0
+
+    if profiles:
+        for profile in profiles:
+            pname = profile["name"]
+            f_dir = module_path / profile["failures_dir"]
+            gp = _build_golden_patterns(profile)
+            pf = _process_profile(
+                f_dir,
+                module_path,
+                module_name,
+                pname,
+                test_stats,
+                xml_mtime,
+                golden_patterns=gp,
+            )
+            module_failures.extend(pf)
+            profile_counts[pname] = len(pf)
+            g_dir = module_path / profile["golden_dir"]
+            total_snapshots += len(list(g_dir.glob("*.png"))) if g_dir.is_dir() else 0
+    else:
+        default_gp = ["src/test/snapshots/images/{name}.png"]
+        pf = _process_profile(
+            Path(failures_dir) if failures_dir else None,
+            module_path,
+            module_name,
+            "baseline",
+            test_stats,
+            xml_mtime,
+            golden_patterns=default_gp,
+        )
+        module_failures.extend(pf)
+        profile_counts["baseline"] = len(pf)
+        golden_dir = module_path / "src" / "test" / "snapshots" / "images"
+        total_snapshots = (
+            len(list(golden_dir.glob("*.png"))) if golden_dir.is_dir() else 0
+        )
+
+    module_data = {
+        "name": module_name,
+        "failures_path": str(failures_dir) if failures_dir else None,
+        "golden_path": str(module_path / "src" / "test" / "snapshots" / "images"),
+        "failure_count": len(module_failures),
+        "snapshot_count": total_snapshots,
+        "profile_counts": profile_counts,
+        "test_stats": test_stats,
+    }
+    return module_data, module_failures
+
+
+def _build_golden_patterns(profile):
+    """Build golden pattern list from a profile config.
+
+    If profile has 'golden_patterns', use those directly.
+    Otherwise build from 'golden_dir' + optional 'golden_suffix'.
+    Patterns use {name} as placeholder for snapshot name (without .png).
+    """
+    if "golden_patterns" in profile:
+        return profile["golden_patterns"]
+    g_dir = profile.get("golden_dir", "")
+    suffix = profile.get("golden_suffix", "")
+    patterns = []
+    if suffix:
+        patterns.append(f"{g_dir}/{{name}}{suffix}.png")
+    patterns.append(f"{g_dir}/{{name}}.png")
+    return patterns
+
+
+def _resolve_golden(module_path, golden_patterns, snapshot_name):
+    """Try each golden pattern in order, return first existing path or None.
+
+    Patterns use {name} as placeholder for the snapshot name (without .png).
+    Example: "src/androidMain/assets/primitive/all/{name}@4x.png"
+    """
+    name = snapshot_name[:-4] if snapshot_name.endswith(".png") else snapshot_name
+    for pattern in golden_patterns:
+        candidate = module_path / pattern.replace("{name}", name)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _process_profile(
+    failures_dir,
+    module_path,
+    module_name,
+    profile_name,
+    test_stats,
+    xml_mtime,
+    golden_patterns=None,
+):
+    """Process one profile's failures for a module. Returns list of failure dicts."""
+    if not golden_patterns:
+        golden_patterns = []
+    results = []
     if failures_dir and Path(failures_dir).is_dir():
         failures_dir = Path(failures_dir)
         current = _detect_current_failures(failures_dir)
         if xml_mtime > 0 and current and test_stats and test_stats["failed"] == 0:
             current = [f for f in current if f.stat().st_mtime > xml_mtime]
 
-        if current and golden_dir.is_dir():
+        # Stale golden check: skip if ANY matching golden is newer than delta
+        if current and golden_patterns:
             filtered = []
             for f in current:
-                golden = golden_dir / base_filename(f.name)
-                if golden.is_file() and golden.stat().st_mtime > f.stat().st_mtime:
+                golden = _resolve_golden(
+                    module_path, golden_patterns, base_filename(f.name)
+                )
+                if golden and golden.stat().st_mtime > f.stat().st_mtime:
                     continue
                 filtered.append(f)
             current = filtered
@@ -63,40 +162,30 @@ def process_single_module(failures_dir, module_name, module_path):
             base = base_filename(fname)
             parsed = parse_filename(base)
             actual_path = failures_dir / base
-            golden_path = golden_dir / base
+            golden_path = _resolve_golden(module_path, golden_patterns, base)
 
-            module_failures.append(
+            results.append(
                 {
                     "module": module_name,
+                    "profile": profile_name,
                     "filename": base,
                     "delta_path": str(delta_path),
                     "actual_path": str(actual_path) if actual_path.is_file() else None,
-                    "golden_path": str(golden_path) if golden_path.is_file() else None,
+                    "golden_path": str(golden_path) if golden_path else None,
                     "package": parsed["package"],
                     "class_name": parsed["class_name"],
                     "method": parsed["method"],
                     "snapshot_name": parsed["snapshot_name"],
                     "status": "pending",
-                    "has_golden": golden_path.is_file(),
+                    "has_golden": golden_path is not None,
                     "has_actual": actual_path.is_file(),
                     "mtime": delta_path.stat().st_mtime,
                 }
             )
-
-    snapshot_count = len(list(golden_dir.glob("*.png"))) if golden_dir.is_dir() else 0
-
-    module_data = {
-        "name": module_name,
-        "failures_path": str(failures_dir) if failures_dir else None,
-        "golden_path": str(golden_dir),
-        "failure_count": len(module_failures),
-        "snapshot_count": snapshot_count,
-        "test_stats": test_stats,
-    }
-    return module_data, module_failures
+    return results
 
 
-def scan_project_incremental(project_path, cancel_event=None):
+def scan_project_incremental(project_path, cancel_event=None, profiles=None):
     """Yield (phase, data) tuples as the scan progresses.
 
     Phases:
@@ -108,8 +197,9 @@ def scan_project_incremental(project_path, cancel_event=None):
     root = Path(project_path)
 
     # Phase 1: Fast discovery with os.walk + pruning
+    # Discover modules that have build/paparazzi/ OR any profile's failures dir
     discovered = []
-    for module_info in _discover_paparazzi_modules(root):
+    for module_info in _discover_paparazzi_modules(root, profiles):
         discovered.append(module_info)
         yield ("discovering", {"found": len(discovered), "current_dir": module_info[1]})
     yield ("discovered", {"total": len(discovered)})
@@ -123,7 +213,7 @@ def scan_project_incremental(project_path, cancel_event=None):
             return
 
         module_data, module_failures = process_single_module(
-            failures_dir, module_name, module_path
+            failures_dir, module_name, module_path, profiles
         )
         modules.append(module_data)
         if module_failures:
@@ -141,7 +231,7 @@ def scan_project_incremental(project_path, cancel_event=None):
     yield ("complete", {"modules": modules, "failures": failures})
 
 
-def _discover_paparazzi_modules(root):
+def _discover_paparazzi_modules(root, profiles=None):
     """Walk project tree with aggressive pruning, yielding modules as found.
 
     Discovers any module with build/paparazzi/ (including passing modules).

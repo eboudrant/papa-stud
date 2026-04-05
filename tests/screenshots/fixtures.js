@@ -14,27 +14,27 @@ const MOCK_SCAN = {
   projectPath: '/tmp/test-app',
   created: '2026-04-03T12:00:00Z',
   modules: [
-    { name: ':libraries:ui:login', failures_path: '/tmp/test-app/libraries/ui/login/build/paparazzi/failures', golden_path: '/tmp/test-app/libraries/ui/login/src/test/snapshots/images', failure_count: 2, snapshot_count: 30 },
-    { name: ':libraries:ui:dashboard', failures_path: null, golden_path: '/tmp/test-app/libraries/ui/dashboard/src/test/snapshots/images', failure_count: 0, snapshot_count: 120 },
-    { name: ':libraries:ui:settings', failures_path: null, golden_path: '/tmp/test-app/libraries/ui/settings/src/test/snapshots/images', failure_count: 0, snapshot_count: 45 },
-    { name: ':app:main', failures_path: '/tmp/test-app/app/main/build/paparazzi/failures', golden_path: '/tmp/test-app/app/main/src/test/snapshots/images', failure_count: 1, snapshot_count: 80 },
+    { name: ':libraries:ui:login', failures_path: '/tmp/test-app/libraries/ui/login/build/paparazzi/failures', golden_path: '/tmp/test-app/libraries/ui/login/src/test/snapshots/images', failure_count: 2, snapshot_count: 30, profile_counts: { baseline: 1, figma: 1 } },
+    { name: ':libraries:ui:dashboard', failures_path: null, golden_path: '/tmp/test-app/libraries/ui/dashboard/src/test/snapshots/images', failure_count: 0, snapshot_count: 120, profile_counts: {} },
+    { name: ':libraries:ui:settings', failures_path: null, golden_path: '/tmp/test-app/libraries/ui/settings/src/test/snapshots/images', failure_count: 0, snapshot_count: 45, profile_counts: {} },
+    { name: ':app:main', failures_path: '/tmp/test-app/app/main/build/paparazzi/failures', golden_path: '/tmp/test-app/app/main/src/test/snapshots/images', failure_count: 1, snapshot_count: 80, profile_counts: { baseline: 1 } },
   ],
   stats: { total: 3, pending: 2, accepted: 1, rejected: 0 },
   failures: [
     {
-      module: ':libraries:ui:login', filename: 'com.example_LoginTest_testLogin.png',
+      module: ':libraries:ui:login', profile: 'baseline', filename: 'com.example_LoginTest_testLogin.png',
       delta_path: '/tmp/fake/delta-login.png', actual_path: '/tmp/fake/login.png', golden_path: '/tmp/fake/golden-login.png',
       package: 'com.example', class_name: 'LoginTest', method: 'testLogin', snapshot_name: null,
       status: 'pending', has_golden: true, has_actual: true, mtime: 1712160622.0
     },
     {
-      module: ':libraries:ui:login', filename: 'com.example_LoginTest_testSignup.png',
+      module: ':libraries:ui:login', profile: 'figma', filename: 'com.example_LoginTest_testSignup.png',
       delta_path: '/tmp/fake/delta-signup.png', actual_path: '/tmp/fake/signup.png', golden_path: '/tmp/fake/golden-signup.png',
       package: 'com.example', class_name: 'LoginTest', method: 'testSignup', snapshot_name: null,
       status: 'pending', has_golden: true, has_actual: true, mtime: 1712160622.0
     },
     {
-      module: ':app:main', filename: 'com.example.ui_DashboardTest_testHeader.png',
+      module: ':app:main', profile: 'baseline', filename: 'com.example.ui_DashboardTest_testHeader.png',
       delta_path: '/tmp/fake/delta-header.png', actual_path: '/tmp/fake/header.png', golden_path: '/tmp/fake/golden-header.png',
       package: 'com.example.ui', class_name: 'DashboardTest', method: 'testHeader', snapshot_name: null,
       status: 'pending', has_golden: true, has_actual: true, mtime: 1712160622.0
@@ -59,6 +59,10 @@ const MOCK_PROJECTS = [{
   name: 'test-app',
   path: '/tmp/test-app',
   added: '2026-04-03T10:00:00Z',
+  profiles: [
+    { name: 'baseline', failures_dir: 'build/paparazzi/failures', golden_patterns: ['src/test/snapshots/images/{name}.png'] },
+    { name: 'figma', failures_dir: 'build/paparazzi/figma-failures', golden_patterns: ['src/assets/all/{name}@4x.png', 'src/assets/all/{name}.png', 'src/assets/examples/{name}.png'] },
+  ],
 }];
 
 /**

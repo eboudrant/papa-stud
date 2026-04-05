@@ -45,18 +45,31 @@ function _renderProjects(projectsList) {
     el.innerHTML = '<div class="empty-state">No projects configured. Add a Gradle project to get started.</div>';
     return;
   }
-  el.innerHTML = projectsList.map(p => `
+  el.innerHTML = projectsList.map(p => {
+    const profiles = p.profiles || [];
+    const profileTags = profiles.map(pr => `<span class="profile-tag">${escHtml(pr.name)}</span>`).join('');
+    return `
     <div class="card" id="project-${p.id}">
       <div class="card-body">
         <div class="card-title">${escHtml(p.name)}</div>
         <div class="card-subtitle">${escHtml(p.path)}</div>
+        <div class="card-profiles">${profileTags}</div>
       </div>
       <div class="card-actions" id="actions-${p.id}">
+        <button class="btn btn-sm" onclick="_showProfiles('${p.id}')">Profiles</button>
         <button class="btn btn-primary" onclick="_scanProject('${p.id}')">Scan</button>
         <button class="btn btn-danger-text" onclick="_deleteProject('${p.id}')">Remove</button>
       </div>
     </div>
-  `).join('');
+    <div class="profiles-form" id="profiles-${p.id}" style="display:none">
+      <div class="profiles-list" id="profiles-list-${p.id}"></div>
+      <div class="profiles-actions">
+        <button class="btn btn-sm" onclick="_addProfile('${p.id}')">Add Profile</button>
+        <button class="btn btn-sm btn-primary" onclick="_saveProfiles('${p.id}')">Save</button>
+        <button class="btn btn-sm" onclick="_hideProfiles('${p.id}')">Cancel</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function _renderScans(scansList) {
@@ -91,12 +104,68 @@ function _renderScans(scansList) {
   }).join('');
 }
 
+// --- Profile management ---
+
+let _editingProfiles = {}; // projectId -> profiles array being edited
+
+function _showProfiles(projectId) {
+  const el = document.getElementById(`profiles-${projectId}`);
+  if (!el) return;
+  el.style.display = 'block';
+  // Load current profiles from the rendered data
+  apiGet('/api/projects').then(projects => {
+    const p = projects.find(x => x.id === projectId);
+    _editingProfiles[projectId] = JSON.parse(JSON.stringify(p?.profiles || []));
+    _renderProfilesList(projectId);
+  });
+}
+
+function _hideProfiles(projectId) {
+  const el = document.getElementById(`profiles-${projectId}`);
+  if (el) el.style.display = 'none';
+  delete _editingProfiles[projectId];
+}
+
+function _renderProfilesList(projectId) {
+  const el = document.getElementById(`profiles-list-${projectId}`);
+  const profiles = _editingProfiles[projectId] || [];
+  el.innerHTML = profiles.map((pr, i) => {
+    const gp = pr.golden_patterns || [];
+    const gpText = gp.join('\n');
+    return `
+    <div class="profile-row">
+      <input class="input input-sm" value="${escAttr(pr.name)}" placeholder="name" style="width:80px" onchange="_editingProfiles['${projectId}'][${i}].name=this.value">
+      <input class="input input-sm input-wide" value="${escAttr(pr.failures_dir)}" placeholder="failures dir (relative)" onchange="_editingProfiles['${projectId}'][${i}].failures_dir=this.value">
+      <textarea class="input input-sm input-wide" rows="${Math.max(1, gp.length)}" placeholder="golden patterns (one per line, use {name})" onchange="_editingProfiles['${projectId}'][${i}].golden_patterns=this.value.split('\\n').filter(Boolean)">${escHtml(gpText)}</textarea>
+      ${pr.name !== 'baseline' ? `<button class="btn btn-sm btn-danger-text" onclick="_removeProfile('${projectId}', ${i})">X</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function _addProfile(projectId) {
+  _editingProfiles[projectId] = _editingProfiles[projectId] || [];
+  _editingProfiles[projectId].push({ name: '', failures_dir: 'build/paparazzi/', golden_patterns: [] });
+  _renderProfilesList(projectId);
+}
+
+function _removeProfile(projectId, index) {
+  _editingProfiles[projectId].splice(index, 1);
+  _renderProfilesList(projectId);
+}
+
+async function _saveProfiles(projectId) {
+  const profiles = _editingProfiles[projectId].filter(p => p.name && p.failures_dir);
+  await apiPut(`/api/projects/${projectId}/profiles`, { profiles });
+  _hideProfiles(projectId);
+  await _loadHome();
+}
+
 function _aggregateSnapshotStats(modules) {
   let snapshots = 0;
   let failures = 0;
   for (const m of modules) {
     snapshots += m.snapshot_count || 0;
-    failures += m.failure_count ?? m.failureCount ?? 0;
+    failures += m.failure_count ?? 0;
   }
   return snapshots > 0 ? { snapshots, failures } : null;
 }
@@ -208,6 +277,7 @@ function _restoreScanButton(projectId) {
   const actionsEl = document.getElementById(`actions-${projectId}`);
   if (actionsEl) {
     actionsEl.innerHTML = `
+      <button class="btn btn-sm" onclick="_showProfiles('${projectId}')">Profiles</button>
       <button class="btn btn-primary" onclick="_scanProject('${projectId}')">Scan</button>
       <button class="btn btn-danger-text" onclick="_deleteProject('${projectId}')">Remove</button>
     `;

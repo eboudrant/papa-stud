@@ -135,6 +135,8 @@ function _renderDetail(scanId) {
   const goldenSrc = f.golden_path ? `/api/images?path=${encodeURIComponent(f.golden_path)}` : '';
   const deltaSrc = f.delta_path ? `/api/images?path=${encodeURIComponent(f.delta_path)}` : '';
   const actualSrc = f.actual_path ? `/api/images?path=${encodeURIComponent(f.actual_path)}` : '';
+  // When actual is missing (e.g., figma handler only writes delta), use delta as fallback
+  const effectiveActual = actualSrc || deltaSrc;
 
   let viewContent = '';
 
@@ -154,8 +156,12 @@ function _renderDetail(scanId) {
         </div>`
       : '<div class="pane-empty">No delta image</div>';
   } else if (_viewMode === 'toggle') {
-    const src = _toggleShowing === 'golden' ? goldenSrc : actualSrc;
-    const label = _toggleShowing === 'golden' ? 'Expected (Golden)' : 'Actual';
+    const src = _toggleShowing === 'golden' ? goldenSrc : effectiveActual;
+    const goldenFile = f.golden_path ? f.golden_path.split('/').pop() : '';
+    const actualFile = f.actual_path ? f.actual_path.split('/').pop() : f.delta_path ? f.delta_path.split('/').pop() : '';
+    const label = _toggleShowing === 'golden'
+      ? `Expected (Golden)${goldenFile ? ' — ' + escHtml(goldenFile) : ''}`
+      : `${actualSrc ? 'Actual' : 'Delta'}${actualFile ? ' — ' + escHtml(actualFile) : ''}`;
     viewContent = src
       ? `<div class="detail-fullview">
           <div class="detail-view-area" id="view-area">
@@ -179,7 +185,7 @@ function _renderDetail(scanId) {
           </div>
           ${zoomBar}
         </div>`
-      : '<div class="pane-empty">Both golden and actual images required for slider</div>';
+      : '<div class="pane-empty">Slider requires a separate actual image. Use Delta or Toggle mode.</div>';
   }
 
   content.innerHTML = `

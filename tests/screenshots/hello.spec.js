@@ -19,7 +19,6 @@ test('add project form toggles', async ({ page }) => {
 });
 
 test('home page shows scans with snapshot bars', async ({ page }) => {
-  // Freeze time so relative timestamps are deterministic
   await page.addInitScript(() => {
     const fixed = new Date('2026-04-03T13:00:00Z').getTime();
     Date.now = () => fixed;
@@ -29,4 +28,13 @@ test('home page shows scans with snapshot bars', async ({ page }) => {
   await expect(page.locator('text=3 screenshot failures')).toBeVisible({ timeout: 10000 });
   await expect(page.locator('.scan-test-bar')).toBeVisible();
   await expect(page).toHaveScreenshot('home-with-scans.png');
+});
+
+test('home page shows profile tags on projects', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/');
+  await expect(page.locator('.profile-tag')).toHaveCount(2, { timeout: 10000 });
+  await expect(page.locator('text=baseline')).toBeVisible();
+  await expect(page.locator('text=figma')).toBeVisible();
+  await expect(page).toHaveScreenshot('home-profile-tags.png');
 });

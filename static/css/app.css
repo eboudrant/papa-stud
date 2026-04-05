@@ -114,6 +114,18 @@ header .tag { font-size: 11px; font-weight: 500; color: var(--accent); backgroun
 .toast-error { background: #fee2e2; color: #991b1b; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 
+/* Profile tags */
+.profile-tag { font-size: 10px; font-weight: 500; color: var(--accent); background: var(--accent-light); padding: 1px 6px; border-radius: 99px; }
+.card-profiles { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+.profiles-form {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 16px; margin-top: -1px; margin-bottom: 8px;
+}
+.profile-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; }
+.profile-row .input-sm { padding: 4px 8px; font-size: 12px; }
+.profiles-actions { display: flex; gap: 6px; margin-top: 8px; }
+.filter-pills { display: flex; gap: 4px; }
+
 /* Watch toggle */
 .watch-btn { transition: all 0.2s; }
 .watch-active { background: var(--accent); color: white; border-color: var(--accent); animation: watch-pulse 2s ease-in-out infinite; }
