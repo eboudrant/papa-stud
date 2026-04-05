@@ -6,13 +6,16 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page);
 });
 
-test('review grid shows failures with sidebar modules', async ({ page }) => {
+test('review grid shows failures with profile pills and sidebar', async ({ page }) => {
   await page.goto('/#/scans/20260403-120000');
   await expect(page.locator('.thumb-card')).toHaveCount(3, { timeout: 10000 });
   await expect(page.locator('text=3 failures')).toBeVisible();
+  // Profile pills visible
+  await expect(page.locator('.filter-pills .pill')).toHaveCount(3); // All + baseline + figma
   // Sidebar shows modules with snapshot bars
   await expect(page.locator('.tree-module')).toHaveCount(4);
-  await expect(page.locator('.test-bar')).toHaveCount(4);
+  // Figma profile tag on card
+  await expect(page.locator('.profile-tag')).toHaveCount(1);
   await expect(page).toHaveScreenshot('review-grid.png');
 });
 

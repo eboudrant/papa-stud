@@ -9,6 +9,7 @@ let _allFailures = [];
 let _observer = null;
 let _activeModule = null;
 let _searchQuery = '';
+let _activeProfile = null; // null = all profiles
 let _watching = false;
 let _watchPollTimer = null;
 let _lastStatsJson = '';
@@ -20,6 +21,7 @@ function showReview(scanId) {
       <aside class="sidebar" id="sidebar"></aside>
       <div class="review-main">
         <div class="review-toolbar">
+          <div class="filter-pills" id="profile-pills"></div>
           <input type="text" class="input search-input" placeholder="Search tests..." oninput="_onSearch(this.value)">
           <div class="toolbar-actions">
             <button class="btn btn-sm watch-btn" id="watch-toggle" onclick="_toggleWatch('${scanId}')">Watch</button>
@@ -38,6 +40,7 @@ function showReview(scanId) {
   _hasMore = true;
   _allFailures = [];
   _activeModule = null;
+  _activeProfile = null;
   _searchQuery = '';
 
   _loadReviewPage(scanId);
@@ -66,6 +69,7 @@ async function _loadReviewPage(scanId) {
   const params = new URLSearchParams({ page: '0', size: '50' });
 
   if (_activeModule) params.set('module', _activeModule);
+  if (_activeProfile) params.set('profile', _activeProfile);
   if (_searchQuery) params.set('q', _searchQuery);
 
   _scanData = await apiGet(`/api/scans/${scanId}?${params}`);
@@ -73,6 +77,7 @@ async function _loadReviewPage(scanId) {
   _allFailures = _scanData.failures;
   _hasMore = _allFailures.length < _scanData.totalFiltered;
 
+  _renderProfilePills(_scanData);
   _renderSidebar(_scanData);
   _renderGrid();
   _updateCounter();
@@ -85,6 +90,7 @@ async function _loadMoreFailures(scanId) {
   const params = new URLSearchParams({ page: String(_currentPage), size: '50' });
 
   if (_activeModule) params.set('module', _activeModule);
+  if (_activeProfile) params.set('profile', _activeProfile);
   if (_searchQuery) params.set('q', _searchQuery);
 
   const data = await apiGet(`/api/scans/${scanId}?${params}`);
@@ -102,7 +108,7 @@ function _renderSidebar(data) {
   const tree = {};
   const moduleSnapshots = {};
   for (const mod of data.modules) {
-    tree[mod.name] = { count: mod.failure_count ?? mod.failureCount ?? 0, packages: {} };
+    tree[mod.name] = { count: mod.failure_count ?? 0, packages: {} };
     moduleSnapshots[mod.name] = mod.snapshot_count || 0;
   }
   for (const f of _allFailures) {
@@ -167,6 +173,7 @@ function _appendGrid(failures) {
       <div class="thumb-info">
         <span class="thumb-name" title="${escAttr(f.filename)}">${escHtml(f.class_name || f.filename)}</span>
         <span class="thumb-method">${escHtml(f.method || '')}</span>
+        ${f.profile && f.profile !== 'baseline' ? `<span class="profile-tag">${escHtml(f.profile)}</span>` : ''}
       </div>
     `;
     grid.appendChild(card);
@@ -189,6 +196,33 @@ function _updateCounter() {
       grid.innerHTML = '<div class="empty-state">No current failures. All screenshot tests are passing.</div>';
     }
   }
+}
+
+function _renderProfilePills(data) {
+  const el = document.getElementById('profile-pills');
+  if (!el) return;
+  // Collect unique profiles from all failures (need a full scan load for this)
+  // Use module profile_counts as source
+  const profiles = new Set();
+  for (const m of data.modules || []) {
+    for (const p of Object.keys(m.profile_counts || {})) {
+      if ((m.profile_counts[p] || 0) > 0) profiles.add(p);
+    }
+  }
+  if (profiles.size <= 1) {
+    el.innerHTML = '';
+    return;
+  }
+  let html = `<button class="pill ${!_activeProfile ? 'active' : ''}" onclick="_filterProfile(null)">All</button>`;
+  for (const p of profiles) {
+    html += `<button class="pill ${_activeProfile === p ? 'active' : ''}" onclick="_filterProfile('${escAttr(p)}')">${escHtml(p)}</button>`;
+  }
+  el.innerHTML = html;
+}
+
+function _filterProfile(profile) {
+  _activeProfile = profile;
+  _resetAndReload();
 }
 
 function _filterModule(mod) {

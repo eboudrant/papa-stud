@@ -71,7 +71,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 status = qs.get("status", [None])[0]
                 query = qs.get("q", [None])[0]
                 module = qs.get("module", [None])[0]
-                result = projects.get_scan(scan_id, page, size, status, query, module)
+                profile = qs.get("profile", [None])[0]
+                result = projects.get_scan(
+                    scan_id, page, size, status, query, module, profile
+                )
                 if result:
                     self._json_response(result)
                 else:
@@ -125,7 +128,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 project = projects.get_project(project_id)
                 if project:
                     job_id = scan_jobs.start_scan(
-                        project_id, project["name"], project["path"]
+                        project_id,
+                        project["name"],
+                        project["path"],
+                        project.get("profiles"),
                     )
                     self._json_response({"jobId": job_id}, 202)
                 else:
@@ -157,6 +163,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _handle_api_put(self):
         path = urlparse(self.path).path
+
+        # PUT /api/projects/{id}/profiles
+        if path.startswith("/api/projects/") and path.endswith("/profiles"):
+            parts = path.split("/")
+            if len(parts) == 5:
+                body = self._read_body_json()
+                if not body or "profiles" not in body:
+                    self._send(
+                        400,
+                        '{"error":"profiles required"}',
+                        "application/json",
+                    )
+                    return
+                result = projects.update_project_profiles(parts[3], body["profiles"])
+                if result:
+                    self._json_response(result)
+                else:
+                    self._send(404, '{"error":"project not found"}', "application/json")
+                return
 
         # PUT /api/scans/{id}/failures/{filename}/status
         if "/failures/" in path and path.endswith("/status"):

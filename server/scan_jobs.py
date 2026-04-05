@@ -21,7 +21,7 @@ _watchers = {}  # scan_id -> ScanWatcher
 JOB_TTL = 300  # 5 minutes
 
 
-def start_scan(project_id, name, path):
+def start_scan(project_id, name, path, profiles=None):
     """Start a background scan. Returns job ID immediately."""
     _cleanup_old_jobs()
     job_id = uuid.uuid4().hex[:8]
@@ -45,7 +45,9 @@ def start_scan(project_id, name, path):
         _jobs[job_id] = job
 
     t = threading.Thread(
-        target=_run_scan, args=(job_id, project_id, name, path, cancel), daemon=True
+        target=_run_scan,
+        args=(job_id, project_id, name, path, cancel, profiles),
+        daemon=True,
     )
     t.start()
     return job_id
@@ -95,11 +97,11 @@ def _cleanup_old_jobs():
             del _jobs[jid]
 
 
-def _run_scan(job_id, project_id, name, path, cancel):
+def _run_scan(job_id, project_id, name, path, cancel, profiles=None):
     """Thread target: run the incremental scan."""
     job = _jobs[job_id]
     try:
-        for phase, data in scan_project_incremental(path, cancel):
+        for phase, data in scan_project_incremental(path, cancel, profiles):
             if phase == "discovering":
                 job["modules_found"] = data["found"]
                 job["current_module"] = data["current_dir"]
@@ -142,6 +144,8 @@ def start_watching(scan_id):
         return False
 
     project_path = scan.get("projectPath", "")
+    project = projects.get_project(scan.get("projectId", ""))
+    scan_profiles = project.get("profiles") if project else None
 
     def on_module_change(module_name, module_path):
         mp = Path(module_path)
@@ -149,11 +153,13 @@ def start_watching(scan_id):
         if not failures_dir.is_dir():
             failures_dir = None
         module_data, module_failures = process_single_module(
-            failures_dir, module_name, mp
+            failures_dir, module_name, mp, scan_profiles
         )
         projects.update_scan_module(scan_id, module_name, module_data, module_failures)
 
-    watcher = create_watcher(scan["modules"], project_path, on_module_change)
+    watcher = create_watcher(
+        scan["modules"], project_path, on_module_change, scan_profiles
+    )
     watcher.start()
     with _lock:
         _watchers[scan_id] = watcher
