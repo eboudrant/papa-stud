@@ -62,8 +62,12 @@ def process_single_module(failures_dir, module_name, module_path, profiles=None)
             )
             module_failures.extend(pf)
             profile_counts[pname] = len(pf)
-            g_dir = module_path / profile["golden_dir"]
-            total_snapshots += len(list(g_dir.glob("*.png"))) if g_dir.is_dir() else 0
+            g_dir_str = profile.get("golden_dir", "")
+            if g_dir_str:
+                g_dir = module_path / g_dir_str
+                total_snapshots += (
+                    len(list(g_dir.glob("*.png"))) if g_dir.is_dir() else 0
+                )
     else:
         default_gp = ["src/test/snapshots/images/{name}.png"]
         pf = _process_profile(
