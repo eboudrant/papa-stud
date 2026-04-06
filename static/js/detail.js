@@ -241,10 +241,21 @@ function _renderDetail(scanId) {
         </div>
       </div>
       ${viewContent}
-      <div class="detail-filename">${escHtml(f.filename)}</div>
+      <div class="detail-filename">
+        ${escHtml(f.filename)}
+        <button class="btn-copy" onclick="_copyPath('${escAttr(f.delta_path || '')}')" title="Copy absolute path">copy</button>
+      </div>
       <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  &larr;=prev  &rarr;=next  esc=back</div>
     </div>
   `;
+}
+
+function _copyPath(path) {
+  navigator.clipboard.writeText(path).then(() => {
+    const btn = event.target;
+    btn.textContent = 'copied';
+    setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+  });
 }
 
 function _cycleViewMode(scanId) {

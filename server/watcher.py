@@ -33,6 +33,7 @@ class _BaseWatcher:
         self._timers = {}
         self._lock = threading.Lock()
         self._path_to_module = {}
+        self._actual_watch_dirs = set()
 
         root = Path(project_path)
         for mod in modules:
@@ -40,19 +41,29 @@ class _BaseWatcher:
             parts = module_name.strip(":").split(":")
             module_path = root / Path(*parts) if parts and parts != ["root"] else root
 
-            watch_dirs = set()
-            watch_dirs.add(module_path / "build" / "test-results")
+            want_dirs = set()
+            # Always watch build/paparazzi (parent of failures dirs)
+            want_dirs.add(module_path / "build" / "paparazzi")
+            want_dirs.add(module_path / "build" / "test-results")
             if profiles:
                 for p in profiles:
-                    watch_dirs.add(module_path / p["failures_dir"])
-                    watch_dirs.add(module_path / p["golden_dir"])
+                    want_dirs.add(module_path / p["failures_dir"])
+                    gdir = p.get("golden_dir", "")
+                    if gdir:
+                        want_dirs.add(module_path / gdir)
             else:
-                watch_dirs.add(module_path / "build" / "paparazzi" / "failures")
-                watch_dirs.add(module_path / "src" / "test" / "snapshots" / "images")
+                want_dirs.add(module_path / "src" / "test" / "snapshots" / "images")
 
-            for d in watch_dirs:
-                if d.is_dir():
+            for d in want_dirs:
+                target = d
+                while not target.is_dir():
+                    target = target.parent
+                    if target == root or target == target.parent:
+                        target = None
+                        break
+                if target:
                     self._path_to_module[str(d)] = (module_name, module_path)
+                    self._actual_watch_dirs.add(str(target))
 
     def start(self):
         raise NotImplementedError
@@ -105,7 +116,7 @@ if HAS_WATCHDOG:
         def __init__(self, modules, project_path, on_module_change, profiles=None):
             super().__init__(modules, project_path, on_module_change, profiles)
             self._observer = Observer()
-            for d in self._path_to_module:
+            for d in self._actual_watch_dirs:
                 handler = _WatchdogHandler(self._on_file_change)
                 self._observer.schedule(handler, d, recursive=True)
 
@@ -128,8 +139,7 @@ class _PollingWatcher(_BaseWatcher):
         super().__init__(modules, project_path, on_module_change, profiles=profiles)
         self._stop_event = threading.Event()
         self._mtimes = {}
-        # Snapshot initial mtimes
-        for d in self._path_to_module:
+        for d in self._actual_watch_dirs:
             self._mtimes[d] = self._dir_mtime(d)
 
     def start(self):
@@ -142,7 +152,7 @@ class _PollingWatcher(_BaseWatcher):
 
     def _poll(self):
         while not self._stop_event.wait(self.POLL_INTERVAL):
-            for d in self._path_to_module:
+            for d in self._actual_watch_dirs:
                 new_mtime = self._dir_mtime(d)
                 if new_mtime != self._mtimes.get(d):
                     self._mtimes[d] = new_mtime

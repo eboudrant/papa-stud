@@ -257,7 +257,9 @@ header .tag { font-size: 11px; font-weight: 500; color: var(--accent); backgroun
   border-top: 1px solid var(--border); background: var(--bg);
 }
 
-.detail-filename { text-align: center; font-size: 12px; color: var(--text-dim); font-family: monospace; margin-top: 8px; word-break: break-all; flex-shrink: 0; }
+.detail-filename { text-align: center; font-size: 12px; color: var(--text-dim); font-family: monospace; margin-top: 8px; word-break: break-all; flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.btn-copy { font-size: 10px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-dim); cursor: pointer; font-family: inherit; }
+.btn-copy:hover { background: var(--bg); }
 .detail-shortcuts { text-align: center; font-size: 11px; color: var(--text-light); flex-shrink: 0; }
 
 /* Empty state */
