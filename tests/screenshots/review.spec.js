@@ -28,12 +28,13 @@ test('review sidebar abbreviates common prefixes', async ({ page }) => {
   await expect(page).toHaveScreenshot('review-sidebar.png');
 });
 
-test('detail view defaults to delta mode', async ({ page }) => {
+test('detail view defaults to delta mode with copy button', async ({ page }) => {
   await page.goto('/#/scans/20260403-120000/review/com.example_LoginTest_testSignup.png');
   await expect(page.locator('.detail-title')).toHaveText('LoginTest', { timeout: 10000 });
   await expect(page.locator('.pill.active')).toHaveText('Delta (1)');
   await expect(page.locator('.detail-view-area img')).toBeVisible();
   await expect(page.locator('.zoom-controls')).toBeVisible();
+  await expect(page.locator('.btn-copy')).toBeVisible();
   await expect(page).toHaveScreenshot('detail-delta.png');
 });
 
