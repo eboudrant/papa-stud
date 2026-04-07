@@ -1,9 +1,11 @@
 import http.server
 import json
+import os
+import tempfile
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from server import projects, scan_jobs
+from server import projects, scan_jobs, video
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -53,7 +55,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             from server.watcher import HAS_WATCHDOG
 
             self._json_response(
-                {"status": "ok", "watchMode": "native" if HAS_WATCHDOG else "polling"}
+                {
+                    "status": "ok",
+                    "watchMode": "native" if HAS_WATCHDOG else "polling",
+                    "ffmpeg": video.has_ffmpeg(),
+                }
             )
         elif path == "/api/projects":
             self._json_response(projects.list_projects())
@@ -72,8 +78,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 query = qs.get("q", [None])[0]
                 module = qs.get("module", [None])[0]
                 profile = qs.get("profile", [None])[0]
+                sort = qs.get("sort", [None])[0]
                 result = projects.get_scan(
-                    scan_id, page, size, status, query, module, profile
+                    scan_id, page, size, status, query, module, profile, sort
                 )
                 if result:
                     self._json_response(result)
@@ -154,6 +161,44 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self._json_response({"cancelled": True})
                 else:
                     self._send(404, '{"error":"job not found"}', "application/json")
+            else:
+                self._send(404, '{"error":"not found"}', "application/json")
+        elif path.startswith("/api/scans/") and path.endswith("/video"):
+            parts = path.split("/")
+            if len(parts) == 5:
+                scan_id = parts[3]
+                scan = projects.get_scan(scan_id, page=0, size=10000)
+                if not scan:
+                    self._send(404, '{"error":"scan not found"}', "application/json")
+                    return
+                failures = [f for f in scan.get("failures", []) if f.get("delta_path")]
+                if not failures:
+                    self._send(
+                        400, '{"error":"no failures to export"}', "application/json"
+                    )
+                    return
+                with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                    tmp_path = tmp.name
+                try:
+                    video.generate_video(failures, tmp_path)
+                    with open(tmp_path, "rb") as f:
+                        data = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Content-Length", str(len(data)))
+                    safe_id = (
+                        scan_id.replace("\r", "").replace("\n", "").replace('"', "")
+                    )
+                    self.send_header(
+                        "Content-Disposition",
+                        f'attachment; filename="papa-stud-{safe_id}.mp4"',
+                    )
+                    self.end_headers()
+                    self.wfile.write(data)
+                except Exception as e:
+                    self._send(500, json.dumps({"error": str(e)}), "application/json")
+                finally:
+                    os.unlink(tmp_path)
             else:
                 self._send(404, '{"error":"not found"}', "application/json")
         else:

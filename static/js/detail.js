@@ -6,7 +6,6 @@ let _detailFailure = null;
 let _detailFailures = [];
 let _detailIndex = -1;
 let _viewMode = 'delta'; // 'delta' | 'toggle' | 'slider'
-let _keepZoom = false; // preserve zoom on prev/next navigation
 let _toggleShowing = 'golden'; // 'golden' | 'actual'
 
 function showDetail(scanId, filename) {
@@ -130,13 +129,9 @@ async function _loadDetail(scanId, filename) {
   _renderDetail(scanId);
   if (_viewMode === 'slider') {
     _initSliderDrag();
-  } else if (_keepZoom) {
-    _applyPanZoom();
-    _initPanZoom(true);
   } else {
     _initPanZoom();
   }
-  _keepZoom = false;
 }
 
 function _renderDetail(scanId) {
@@ -234,6 +229,7 @@ function _renderDetail(scanId) {
           <button class="pill ${_viewMode === 'toggle' ? 'active' : ''}" onclick="_setViewMode('toggle', '${scanId}')">Toggle (2)</button>
           <button class="pill ${_viewMode === 'slider' ? 'active' : ''}" onclick="_setViewMode('slider', '${scanId}')">Slider (3)</button>
         </div>
+        ${f.diff_pct != null ? `<span class="detail-diff-pct" style="color:${_diffColor(f.diff_pct)}">${f.diff_pct.toFixed(3)}%</span>` : ''}
         <div class="detail-nav">
           <button class="btn" onclick="_detailPrev('${scanId}')" ${_detailIndex <= 0 ? 'disabled' : ''}>&larr; Prev</button>
           <span class="counter">${_detailIndex + 1} / ${_detailFailures.length}</span>
@@ -243,16 +239,23 @@ function _renderDetail(scanId) {
       ${viewContent}
       <div class="detail-filename">
         ${escHtml(f.filename)}
-        <button class="btn-copy" onclick="_copyPath('${escAttr(f.delta_path || '')}')" title="Copy absolute path">copy</button>
+        <button class="btn-copy" onclick="_copyPath('${escAttr(f.delta_path || '')}', this)" title="Copy absolute path">copy</button>
       </div>
       <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  &larr;=prev  &rarr;=next  esc=back</div>
     </div>
   `;
 }
 
-function _copyPath(path) {
+function _diffColor(pct) {
+  if (pct < 1) return '#f59e0b';    // amber — trivial
+  if (pct < 5) return '#f97316';    // orange — minor
+  if (pct < 10) return '#ef4444';   // red — moderate
+  if (pct < 30) return '#dc2626';   // dark red — major
+  return '#7c3aed';                  // purple — severe
+}
+
+function _copyPath(path, btn) {
   navigator.clipboard.writeText(path).then(() => {
-    const btn = event.target;
     btn.textContent = 'copied';
     setTimeout(() => { btn.textContent = 'copy'; }, 1500);
   });
@@ -340,7 +343,7 @@ function _detailNext(scanId) {
   if (_detailIndex < _detailFailures.length - 1) {
     _detailIndex++;
     _detailFailure = _detailFailures[_detailIndex];
-    _keepZoom = true;
+
     navigate(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
   }
 }
@@ -349,7 +352,7 @@ function _detailPrev(scanId) {
   if (_detailIndex > 0) {
     _detailIndex--;
     _detailFailure = _detailFailures[_detailIndex];
-    _keepZoom = true;
+
     navigate(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
   }
 }

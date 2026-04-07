@@ -10,6 +10,7 @@ let _observer = null;
 let _activeModule = null;
 let _searchQuery = '';
 let _activeProfile = null; // null = all profiles
+let _activeSort = localStorage.getItem('papastud_sort') || null;
 let _watching = false;
 let _watchPollTimer = null;
 let _lastStatsJson = '';
@@ -23,7 +24,15 @@ function showReview(scanId) {
         <div class="review-toolbar">
           <div class="filter-pills" id="profile-pills"></div>
           <input type="text" class="input search-input" placeholder="Search tests..." oninput="_onSearch(this.value)">
+          <select class="input input-sm" id="sort-select" onchange="_setSort(this.value)">
+            <option value="">Sort: default</option>
+            <option value="name">Sort: name</option>
+            <option value="module">Sort: module</option>
+            <option value="profile">Sort: profile</option>
+            <option value="diff">Sort: % diff</option>
+          </select>
           <div class="toolbar-actions">
+            <button class="btn btn-sm" id="export-video-btn" onclick="_exportVideo('${scanId}')">Export Video</button>
             <button class="btn btn-sm watch-btn" id="watch-toggle" onclick="_toggleWatch('${scanId}')">Watch</button>
             <span id="review-counter" class="counter"></span>
           </div>
@@ -41,6 +50,7 @@ function showReview(scanId) {
   _allFailures = [];
   _activeModule = null;
   _activeProfile = null;
+  _activeSort = localStorage.getItem('papastud_sort') || null;
   _searchQuery = '';
 
   _loadReviewPage(scanId);
@@ -77,6 +87,7 @@ async function _loadReviewPage(scanId) {
 
   if (_activeModule) params.set('module', _activeModule);
   if (_activeProfile) params.set('profile', _activeProfile);
+  if (_activeSort) params.set('sort', _activeSort);
   if (_searchQuery) params.set('q', _searchQuery);
 
   _scanData = await apiGet(`/api/scans/${scanId}?${params}`);
@@ -85,6 +96,8 @@ async function _loadReviewPage(scanId) {
   _hasMore = _allFailures.length < _scanData.totalFiltered;
 
   _renderProfilePills(_scanData);
+  const sortEl = document.getElementById('sort-select');
+  if (sortEl && _activeSort) sortEl.value = _activeSort;
   _renderSidebar(_scanData);
   _renderGrid();
   _updateCounter();
@@ -98,6 +111,7 @@ async function _loadMoreFailures(scanId) {
 
   if (_activeModule) params.set('module', _activeModule);
   if (_activeProfile) params.set('profile', _activeProfile);
+  if (_activeSort) params.set('sort', _activeSort);
   if (_searchQuery) params.set('q', _searchQuery);
 
   const data = await apiGet(`/api/scans/${scanId}?${params}`);
@@ -180,6 +194,7 @@ function _appendGrid(failures) {
       <div class="thumb-info">
         <span class="thumb-name" title="${escAttr(f.filename)}">${escHtml(f.class_name || f.filename)}</span>
         <span class="thumb-method">${escHtml(f.method || '')}</span>
+        ${f.diff_pct != null ? `<span class="diff-pct">${f.diff_pct.toFixed(3)}%</span>` : ''}
         ${f.profile && f.profile !== 'baseline' ? `<span class="profile-tag">${escHtml(f.profile)}</span>` : ''}
       </div>
     `;
@@ -225,6 +240,13 @@ function _renderProfilePills(data) {
     html += `<button class="pill ${_activeProfile === p ? 'active' : ''}" onclick="_filterProfile('${escAttr(p)}')">${escHtml(p)}</button>`;
   }
   el.innerHTML = html;
+}
+
+function _setSort(value) {
+  _activeSort = value || null;
+  if (_activeSort) localStorage.setItem('papastud_sort', _activeSort);
+  else localStorage.removeItem('papastud_sort');
+  _resetAndReload();
 }
 
 function _filterProfile(profile) {
@@ -285,6 +307,47 @@ function _resetAndReload() {
   const scanId = _scanData?.id;
   if (scanId) _loadReviewPage(scanId);
 }
+
+// --- Export video ---
+
+async function _exportVideo(scanId) {
+  const btn = document.getElementById('export-video-btn');
+  if (!btn || !_scanData) return;
+
+  const health = await apiGet('/api/health');
+  if (!health.ffmpeg) {
+    alert('Video export requires ffmpeg.\n\nInstall it:\n  macOS: brew install ffmpeg\n  Linux: apt install ffmpeg');
+    return;
+  }
+
+  const failureCount = _scanData.stats.total;
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  showToast(`Generating video (${failureCount} frames)... this may take a moment.`);
+
+  try {
+    const res = await fetch(`/api/scans/${scanId}/video`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(err.error || 'Export failed', 'error', 6000);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `papa-stud-${scanId}.mp4`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Video saved to Downloads.');
+  } catch (e) {
+    showToast('Export failed: ' + e.message, 'error', 6000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Export Video';
+  }
+}
+
 
 // --- Watch mode ---
 

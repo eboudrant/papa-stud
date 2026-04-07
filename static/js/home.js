@@ -246,17 +246,17 @@ function _pollScanJob(jobId, projectId) {
       if (job.scanId && job.failuresFound > 0) {
         navigate(`/scans/${job.scanId}`);
       } else {
-        _showToast(`Scan complete — no failures found.`, 'success');
+        showToast(`Scan complete — no failures found.`, 'success');
         _restoreScanButton(projectId);
         await _loadHome();
       }
     } else if (job.status === 'cancelled') {
       _stopPolling(jobId);
-      _showToast('Scan cancelled.', 'info');
+      showToast('Scan cancelled.', 'info');
       _restoreScanButton(projectId);
     } else if (job.status === 'failed') {
       _stopPolling(jobId);
-      _showToast(`Scan failed: ${escHtml(job.error || 'unknown error')}`, 'error');
+      showToast(`Scan failed: ${escHtml(job.error || 'unknown error')}`, 'error');
       _restoreScanButton(projectId);
     }
   }, 1500);
@@ -284,20 +284,6 @@ function _restoreScanButton(projectId) {
   }
 }
 
-function _showToast(message, type) {
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.className = 'toast-container';
-    document.body.appendChild(container);
-  }
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  container.appendChild(toast);
-  setTimeout(() => toast.remove(), 4000);
-}
 
 
 function _relativeTime(iso) {
