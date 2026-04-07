@@ -6,6 +6,7 @@ JUnit XML for test statistics.
 """
 
 import os
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -42,6 +43,7 @@ def process_single_module(failures_dir, module_name, module_path, profiles=None)
     Reused by both the initial scan and the realtime watcher.
     """
     test_stats, xml_mtime = _parse_junit_xml(module_path)
+    diff_pcts = _parse_diff_percentages(module_path)
     module_failures = []
     profile_counts = {}
     total_snapshots = 0
@@ -59,6 +61,7 @@ def process_single_module(failures_dir, module_name, module_path, profiles=None)
                 test_stats,
                 xml_mtime,
                 golden_patterns=gp,
+                diff_pcts=diff_pcts,
             )
             module_failures.extend(pf)
             profile_counts[pname] = len(pf)
@@ -78,6 +81,7 @@ def process_single_module(failures_dir, module_name, module_path, profiles=None)
             test_stats,
             xml_mtime,
             golden_patterns=default_gp,
+            diff_pcts=diff_pcts,
         )
         module_failures.extend(pf)
         profile_counts["baseline"] = len(pf)
@@ -138,6 +142,7 @@ def _process_profile(
     test_stats,
     xml_mtime,
     golden_patterns=None,
+    diff_pcts=None,
 ):
     """Process one profile's failures for a module. Returns list of failure dicts."""
     if not golden_patterns:
@@ -181,6 +186,7 @@ def _process_profile(
                     "method": parsed["method"],
                     "snapshot_name": parsed["snapshot_name"],
                     "status": "pending",
+                    "diff_pct": (diff_pcts or {}).get(base),
                     "has_golden": golden_path is not None,
                     "has_actual": actual_path.is_file(),
                     "mtime": delta_path.stat().st_mtime,
@@ -299,6 +305,38 @@ def _detect_current_failures(failures_dir):
             break
 
     return current
+
+
+def _parse_diff_percentages(module_path):
+    """Extract diff percentages from JUnit XML failure messages.
+
+    Returns dict mapping delta filename to percentage (e.g., {"test.png": 0.044794}).
+    Parses 'Images differ (by X.XXX%)' from failure message attributes.
+    """
+    result = {}
+    for variant in ("testDebugUnitTest", "testReleaseUnitTest"):
+        results_dir = module_path / "build" / "test-results" / variant
+        if not results_dir.is_dir():
+            continue
+        for xml_file in results_dir.glob("TEST-*.xml"):
+            try:
+                tree = ET.parse(xml_file)
+                for tc in tree.getroot().iter("testcase"):
+                    for fail in tc.iter("failure"):
+                        msg = fail.get("message", "")
+                        # Extract percentage
+                        pct_match = re.search(r"differ \(by ([\d.]+)%\)", msg)
+                        # Extract delta filename
+                        delta_match = re.search(r"delta-([^\s]+\.png)", msg)
+                        if pct_match and delta_match:
+                            # Store without delta- prefix
+                            fname = delta_match.group(1)
+                            # Get just the base filename
+                            fname = fname.split("/")[-1]
+                            result[fname] = float(pct_match.group(1))
+            except (ET.ParseError, OSError):
+                pass
+    return result
 
 
 def _parse_junit_xml(module_path):

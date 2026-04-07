@@ -56,6 +56,22 @@ function escAttr(str) {
   return escHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** Show a toast notification. type: 'success' | 'info' | 'error' */
+function showToast(message, type, duration) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type || 'success'}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), duration || 4000);
+}
+
 /** Render a snapshot pass/fail bar. cssClass defaults to 'test-bar'. */
 function snapshotBar(total, failed, cssClass) {
   if (!total || total === 0) return '';

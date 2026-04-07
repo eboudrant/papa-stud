@@ -214,7 +214,14 @@ def list_scans():
 
 
 def get_scan(
-    scan_id, page=0, size=50, status=None, query=None, module=None, profile=None
+    scan_id,
+    page=0,
+    size=50,
+    status=None,
+    query=None,
+    module=None,
+    profile=None,
+    sort=None,
 ):
     with _lock:
         scan = _read_json(_scan_path(scan_id))
@@ -239,6 +246,20 @@ def get_scan(
             or q in f["class_name"].lower()
             or q in f["method"].lower()
         ]
+
+    # Sort
+    if sort == "name":
+        failures.sort(key=lambda f: f.get("filename", "").lower())
+    elif sort == "module":
+        failures.sort(
+            key=lambda f: (f.get("module", ""), f.get("filename", "").lower())
+        )
+    elif sort == "profile":
+        failures.sort(
+            key=lambda f: (f.get("profile", ""), f.get("filename", "").lower())
+        )
+    elif sort == "diff":
+        failures.sort(key=lambda f: f.get("diff_pct") or 0, reverse=True)
 
     total_filtered = len(failures)
     start = page * size

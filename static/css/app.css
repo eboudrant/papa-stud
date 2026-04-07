@@ -185,6 +185,7 @@ header .tag { font-size: 11px; font-weight: 500; color: var(--accent); backgroun
 .thumb-info { padding: 10px 12px; display: flex; align-items: center; gap: 6px; }
 .thumb-name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .thumb-method { font-size: 12px; color: var(--text-dim); }
+.diff-pct { font-size: 10px; color: #b45309; background: #fef3c7; padding: 1px 5px; border-radius: 99px; flex-shrink: 0; }
 
 /* Detail view */
 .detail {
@@ -198,6 +199,7 @@ header .tag { font-size: 11px; font-weight: 500; color: var(--accent); backgroun
 .detail-meta { flex: 1; min-width: 0; }
 .detail-title { font-size: 18px; font-weight: 600; display: block; }
 .detail-subtitle { font-size: 13px; color: var(--text-dim); display: block; margin-top: 2px; }
+.detail-diff-pct { font-size: 22px; font-weight: 700; font-family: monospace; flex-shrink: 0; }
 .detail-nav { display: flex; align-items: center; gap: 8px; }
 
 .detail-mode-tabs { display: flex; gap: 4px; }

@@ -78,8 +78,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 query = qs.get("q", [None])[0]
                 module = qs.get("module", [None])[0]
                 profile = qs.get("profile", [None])[0]
+                sort = qs.get("sort", [None])[0]
                 result = projects.get_scan(
-                    scan_id, page, size, status, query, module, profile
+                    scan_id, page, size, status, query, module, profile, sort
                 )
                 if result:
                     self._json_response(result)
