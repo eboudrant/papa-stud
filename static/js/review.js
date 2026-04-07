@@ -24,6 +24,7 @@ function showReview(scanId) {
           <div class="filter-pills" id="profile-pills"></div>
           <input type="text" class="input search-input" placeholder="Search tests..." oninput="_onSearch(this.value)">
           <div class="toolbar-actions">
+            <button class="btn btn-sm" id="export-video-btn" onclick="_exportVideo('${scanId}')">Export Video</button>
             <button class="btn btn-sm watch-btn" id="watch-toggle" onclick="_toggleWatch('${scanId}')">Watch</button>
             <span id="review-counter" class="counter"></span>
           </div>
@@ -284,6 +285,42 @@ function _resetAndReload() {
   _hasMore = true;
   const scanId = _scanData?.id;
   if (scanId) _loadReviewPage(scanId);
+}
+
+// --- Export video ---
+
+async function _exportVideo(scanId) {
+  const btn = document.getElementById('export-video-btn');
+  if (!btn || !_scanData) return;
+
+  // Check ffmpeg availability
+  const health = await apiGet('/api/health');
+  if (!health.ffmpeg) {
+    alert('Video export requires ffmpeg.\n\nInstall it:\n  macOS: brew install ffmpeg\n  Linux: apt install ffmpeg');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+
+  try {
+    const res = await fetch(`/api/scans/${scanId}/video`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || 'Export failed');
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `papa-stud-${scanId}.mp4`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Export Video';
+  }
 }
 
 // --- Watch mode ---

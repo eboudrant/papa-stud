@@ -16,6 +16,8 @@ test('review grid shows failures with profile pills and sidebar', async ({ page 
   await expect(page.locator('.tree-module')).toHaveCount(4);
   // Figma profile tag on card
   await expect(page.locator('.profile-tag')).toHaveCount(1);
+  // Export video button visible
+  await expect(page.locator('#export-video-btn')).toBeVisible();
   await expect(page).toHaveScreenshot('review-grid.png');
 });
 
