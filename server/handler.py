@@ -186,9 +186,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.send_response(200)
                     self.send_header("Content-Type", "video/mp4")
                     self.send_header("Content-Length", str(len(data)))
+                    safe_id = scan_id.replace("\r", "").replace("\n", "").replace('"', "")
                     self.send_header(
                         "Content-Disposition",
-                        f'attachment; filename="papa-stud-{scan_id}.mp4"',
+                        f'attachment; filename="papa-stud-{safe_id}.mp4"',
                     )
                     self.end_headers()
                     self.wfile.write(data)
