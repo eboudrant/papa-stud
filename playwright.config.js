@@ -17,7 +17,7 @@ module.exports = defineConfig({
     deviceScaleFactor: 1,
   },
   webServer: {
-    command: 'python3 server.py',
+    command: 'node src/server.js',
     port: 8770,
     reuseExistingServer: true,
     timeout: 30_000,

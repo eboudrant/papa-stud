@@ -91,6 +91,7 @@ async function _loadReviewPage(scanId) {
   if (_searchQuery) params.set('q', _searchQuery);
 
   _scanData = await apiGet(`/api/scans/${scanId}?${params}`);
+  setNavContext({ projectName: _scanData.projectName });
   _currentPage = 0;
   _allFailures = _scanData.failures;
   _hasMore = _allFailures.length < _scanData.totalFiltered;

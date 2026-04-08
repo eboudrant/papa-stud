@@ -1,12 +1,31 @@
 {
-  "name": "papa-stud",
+  "name": "papastud",
+  "version": "1.0.0",
+  "description": "Screenshot failure reviewer for Android testing tools",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
+    "start": "node src/server.js",
+    "electron": "electron .",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "test": "node --test tests/node/*.test.js",
     "test:screenshots": "docker run --rm -e CI=true papastud-test npx playwright test",
     "test:screenshots:update": "docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots",
     "test:screenshots:build": "docker build -f Dockerfile.test -t papastud-test ."
   },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.3.2",
+    "fast-glob": "^3.3.0",
+    "fast-xml-parser": "^4.5.0"
+  },
   "devDependencies": {
-    "@playwright/test": "1.59.1"
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-dmg": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "@playwright/test": "1.59.1",
+    "electron": "^33.4.11"
   }
 }

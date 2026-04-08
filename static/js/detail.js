@@ -117,6 +117,7 @@ function showDetail(scanId, filename) {
 async function _loadDetail(scanId, filename) {
   const data = await apiGet(`/api/scans/${scanId}?page=0&size=10000`);
   _detailScan = data;
+  setNavContext({ projectName: data.projectName });
   _detailFailures = data.failures;
   _detailIndex = _detailFailures.findIndex(f => f.filename === filename);
   _detailFailure = _detailIndex >= 0 ? _detailFailures[_detailIndex] : null;

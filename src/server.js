@@ -1,0 +1,14 @@
+/**
+ * Papa Stud — Screenshot Failure Reviewer
+ * Node.js entry point. Run with: node src/server.js
+ */
+
+const { createApp } = require('./handler');
+
+const port = parseInt(process.env.PORT || '8770', 10);
+
+createApp().listen(port, '0.0.0.0', () => {
+  console.log('\n  Papa Stud is running!');
+  console.log(`    ->  http://localhost:${port}`);
+  console.log('    Press Ctrl+C to stop\n');
+});

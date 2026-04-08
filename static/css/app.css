@@ -50,9 +50,15 @@ header {
   top: 0;
   z-index: 100;
 }
-header a { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px; }
+header a { text-decoration: none; color: inherit; }
+.header-brand { display: flex; align-items: center; gap: 12px; }
 header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
 .title-io { font-weight: 300; color: var(--text-light); }
+.nav-bar { display: flex; align-items: center; gap: 4px; margin-left: 16px; }
+.nav-sep { color: var(--text-light); font-size: 13px; margin: 0 2px; }
+.nav-link { font-size: 13px; font-weight: 500; color: var(--text-dim); text-decoration: none; padding: 4px 8px; border-radius: 4px; transition: background 0.15s, color 0.15s; cursor: pointer; }
+.nav-link:hover { background: var(--accent-light); color: var(--accent); }
+.nav-link.active { color: var(--text); font-weight: 600; }
 .btn-theme { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-dim); margin-left: auto; padding: 4px 8px; }
 .btn-theme:hover { color: var(--text); }
 

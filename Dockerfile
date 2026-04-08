@@ -1,25 +1,22 @@
-FROM python:3.14-slim
+FROM node:22-slim
 
 RUN groupadd -r papastud && useradd -r -g papastud -d /app papastud
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-COPY server/ server/
+COPY src/ src/
 COPY static/ static/
-COPY server.py .
 
 RUN mkdir -p data && chown -R papastud:papastud /app
-
-ENV PYTHONUNBUFFERED=1
 
 USER papastud
 
 EXPOSE 8770
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8770/api/health')" || exit 1
+    CMD node -e "require('http').get('http://localhost:8770/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
-CMD ["python3", "server.py"]
+CMD ["node", "src/server.js"]
