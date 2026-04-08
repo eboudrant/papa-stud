@@ -69,9 +69,9 @@ function createRouter() {
     if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'absolute path required' });
     }
-    // Resolve to canonical path, verify it's under a project, and is a .png
     const resolved = path.resolve(filePath);
-    if (!resolved.endsWith('.png') && !resolved.endsWith('.jpg') && !resolved.endsWith('.jpeg')) {
+    const ext = path.extname(resolved).toLowerCase();
+    if (ext !== '.png' && ext !== '.jpg' && ext !== '.jpeg') {
       return res.status(400).json({ error: 'only image files allowed' });
     }
     const allProjects = projects.listProjects();
@@ -80,8 +80,16 @@ function createRouter() {
       return resolved.startsWith(root);
     });
     if (!allowed) return res.status(403).json({ error: 'forbidden' });
-    // Safe: resolved is canonical, validated as under a project root, and is an image
-    res.sendFile(path.normalize(resolved));
+    // Stream the validated file directly instead of sendFile
+    const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+    try {
+      const stat = fs.statSync(resolved);
+      res.set('Content-Type', mime);
+      res.set('Content-Length', String(stat.size));
+      fs.createReadStream(resolved).pipe(res);
+    } catch {
+      res.status(404).json({ error: 'file not found' });
+    }
   });
 
   // --- API POST ---
@@ -133,18 +141,21 @@ function createRouter() {
     const failures = (scan.failures || []).filter(f => f.delta_path);
     if (!failures.length) return res.status(400).json({ error: 'no failures to export' });
 
-    // Use os.tmpdir() + sanitized ID — no user-controlled path components
-    const tmpPath = path.join(os.tmpdir(), `papastud-${scanId}.mp4`);
+    // Temp path derived entirely from mkdtempSync — no user input in path
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-vid-'));
+    const tmpFile = path.join(tmpDir, 'output.mp4');
     try {
-      video.generateVideo(failures, tmpPath);
+      video.generateVideo(failures, tmpFile);
       res.set('Content-Disposition', `attachment; filename="papa-stud-${scanId}.mp4"`);
-      const absoluteTmp = path.resolve(tmpPath);
-      res.sendFile(absoluteTmp, () => {
-        try { fs.unlinkSync(absoluteTmp); } catch {}
+      res.set('Content-Type', 'video/mp4');
+      const stat = fs.statSync(tmpFile);
+      res.set('Content-Length', String(stat.size));
+      fs.createReadStream(tmpFile).pipe(res).on('finish', () => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
       });
     } catch (e) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
       res.status(500).json({ error: e.message });
-      try { fs.unlinkSync(tmpPath); } catch {}
     }
   });
 
