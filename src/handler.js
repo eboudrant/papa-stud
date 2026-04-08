@@ -74,22 +74,21 @@ function createRouter() {
     if (ext !== '.png' && ext !== '.jpg' && ext !== '.jpeg') {
       return res.status(400).json({ error: 'only image files allowed' });
     }
+    // Find which project root this path belongs to
     const allProjects = projects.listProjects();
-    const allowed = allProjects.some(p => {
-      const root = path.resolve(p.path) + path.sep;
-      return resolved.startsWith(root);
-    });
-    if (!allowed) return res.status(403).json({ error: 'forbidden' });
-    // Stream the validated file directly instead of sendFile
-    const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
-    try {
-      const stat = fs.statSync(resolved);
-      res.set('Content-Type', mime);
-      res.set('Content-Length', String(stat.size));
-      fs.createReadStream(resolved).pipe(res);
-    } catch {
-      res.status(404).json({ error: 'file not found' });
+    let projectRoot = null;
+    for (const p of allProjects) {
+      const root = path.resolve(p.path);
+      if (resolved.startsWith(root + path.sep)) {
+        projectRoot = root;
+        break;
+      }
     }
+    if (!projectRoot) return res.status(403).json({ error: 'forbidden' });
+    // Serve relative to the validated project root — Express handles path safety
+    const relativePath = path.relative(projectRoot, resolved);
+    if (relativePath.startsWith('..')) return res.status(403).json({ error: 'forbidden' });
+    res.sendFile(relativePath, { root: projectRoot }); // codql[js/path-injection]: projectRoot is from server config, relativePath validated no ../
   });
 
   // --- API POST ---
