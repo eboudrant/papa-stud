@@ -3,7 +3,6 @@
  */
 
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -15,11 +14,8 @@ const video = require('./video');
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
 const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
 
-const limiter = rateLimit({ windowMs: 60000, max: 120 });
-
 function createRouter() {
   const router = express.Router();
-  router.use(limiter);
 
   // --- API GET ---
 
