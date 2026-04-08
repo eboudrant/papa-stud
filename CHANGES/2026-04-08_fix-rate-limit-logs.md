@@ -1,15 +1,15 @@
-# fix: rate limit removal + Electron logging
+# fix: rate limit removal, Electron logging
 
 **Date:** 2026-04-08
 **Type:** Fix
 
 ## Intent
 
-Remove rate limiting that blocked normal desktop app usage (scrolling through failures triggered "Too many requests"). Add server logging and DevTools access for the Electron app.
+Remove rate limiting that blocked normal desktop app usage. Add server logging and DevTools access for the Electron app.
 
 ### Prompts summary
 
-1. Rate limiter (120 req/min) caused errors when scrolling fast through scan results
+1. Rate limiter (120 req/min) caused "Too many requests" when scrolling fast through scan results
 2. Electron app had no way to access server logs or DevTools
 3. Add native macOS menu bar with standard shortcuts
 
@@ -21,7 +21,7 @@ Remove rate limiting that blocked normal desktop app usage (scrolling through fa
 
 ### `electron/main.js` (MODIFIED)
 - Server logs written to `~/Library/Application Support/PapaStud/server.log`
-- Native macOS menu bar with View (DevTools, zoom, reload) and Help menus
+- Native macOS menu bar with View (DevTools, zoom, reload), Window, Help menus
 - Help → Open Log File / Open Data Directory shortcuts
 - `console.log`/`console.error` intercepted and written to log file with timestamps
 
