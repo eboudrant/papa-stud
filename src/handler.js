@@ -3,6 +3,7 @@
  */
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -12,30 +13,13 @@ const templates = require('./templates');
 const video = require('./video');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
+const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
 
-// Simple rate limiter: max requests per window per IP
-function rateLimit(maxRequests = 60, windowMs = 60000) {
-  const hits = new Map();
-  return (req, res, next) => {
-    const ip = req.ip;
-    const now = Date.now();
-    const record = hits.get(ip);
-    if (!record || now - record.start > windowMs) {
-      hits.set(ip, { start: now, count: 1 });
-      return next();
-    }
-    record.count++;
-    if (record.count > maxRequests) {
-      return res.status(429).json({ error: 'too many requests' });
-    }
-    next();
-  };
-}
-
-const fsRateLimit = rateLimit(120, 60000);
+const limiter = rateLimit({ windowMs: 60000, max: 120 });
 
 function createRouter() {
   const router = express.Router();
+  router.use(limiter);
 
   // --- API GET ---
 
@@ -80,21 +64,29 @@ function createRouter() {
     else res.status(404).json({ error: 'job not found' });
   });
 
-  router.get('/api/images', fsRateLimit, (req, res) => {
+  router.get('/api/images', (req, res) => {
     const filePath = req.query.path;
-    if (!filePath) return res.status(400).json({ error: 'path required' });
-    // Resolve to absolute path and validate it's under a registered project
-    const resolved = path.resolve(filePath);
-    if (resolved !== filePath && !path.isAbsolute(filePath)) {
+    if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'absolute path required' });
     }
-    if (!projects.isPathUnderProject(resolved)) return res.status(403).json({ error: 'forbidden' });
-    res.sendFile(resolved);
+    // Resolve to canonical path, verify it's under a project, and is a .png
+    const resolved = path.resolve(filePath);
+    if (!resolved.endsWith('.png') && !resolved.endsWith('.jpg') && !resolved.endsWith('.jpeg')) {
+      return res.status(400).json({ error: 'only image files allowed' });
+    }
+    const allProjects = projects.listProjects();
+    const allowed = allProjects.some(p => {
+      const root = path.resolve(p.path) + path.sep;
+      return resolved.startsWith(root);
+    });
+    if (!allowed) return res.status(403).json({ error: 'forbidden' });
+    // Safe: resolved is canonical, validated as under a project root, and is an image
+    res.sendFile(path.normalize(resolved));
   });
 
   // --- API POST ---
 
-  router.post('/api/projects', fsRateLimit, (req, res) => {
+  router.post('/api/projects', (req, res) => {
     const body = req.body;
     if (!body || !body.path) return res.status(400).json({ error: 'path required' });
     const name = body.name || path.basename(body.path);
@@ -134,19 +126,21 @@ function createRouter() {
     }
   });
 
-  router.post('/api/scans/:id/video', fsRateLimit, (req, res) => {
-    const scan = projects.getScan(req.params.id, { page: 0, size: 10000 });
+  router.post('/api/scans/:id/video', (req, res) => {
+    const scanId = req.params.id.replace(/[^a-zA-Z0-9._-]/g, '');
+    const scan = projects.getScan(scanId, { page: 0, size: 10000 });
     if (!scan) return res.status(404).json({ error: 'scan not found' });
     const failures = (scan.failures || []).filter(f => f.delta_path);
     if (!failures.length) return res.status(400).json({ error: 'no failures to export' });
 
-    const safeId = req.params.id.replace(/[^a-zA-Z0-9._-]/g, '');
-    const tmpPath = path.join(os.tmpdir(), `papastud-${safeId}.mp4`);
+    // Use os.tmpdir() + sanitized ID — no user-controlled path components
+    const tmpPath = path.join(os.tmpdir(), `papastud-${scanId}.mp4`);
     try {
       video.generateVideo(failures, tmpPath);
-      res.set('Content-Disposition', `attachment; filename="papa-stud-${safeId}.mp4"`);
-      res.sendFile(tmpPath, () => {
-        try { fs.unlinkSync(tmpPath); } catch {}
+      res.set('Content-Disposition', `attachment; filename="papa-stud-${scanId}.mp4"`);
+      const absoluteTmp = path.resolve(tmpPath);
+      res.sendFile(absoluteTmp, () => {
+        try { fs.unlinkSync(absoluteTmp); } catch {}
       });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -216,7 +210,8 @@ function createApp() {
   app.use(express.json());
   app.use(createRouter());
   app.use('/static', express.static(STATIC_DIR));
-  app.get('/', (req, res) => res.sendFile(path.join(STATIC_DIR, 'index.html')));
+  // Serve index.html from a known constant path
+  app.get('/', (req, res) => res.sendFile(INDEX_HTML));
   return app;
 }
 
