@@ -69,7 +69,7 @@ def generate_video(failures, output_path):
             info_esc = _escape_drawtext(info)
             bg_hex = f"0x{BG_COLOR[0]:02x}{BG_COLOR[1]:02x}{BG_COLOR[2]:02x}"
             # Bottom zone: info(14px) + padding + filename(18px) + padding + progress bar
-            overlay_h = (38 if STICK_FIGURE else 8)
+            overlay_h = 38 if STICK_FIGURE else 8
             bottom_zone = 20 + 18 + 6 + 14 + 10 + overlay_h  # ~76-106px
             img_h = FRAME_HEIGHT - 20 - bottom_zone  # 20px top padding
 
