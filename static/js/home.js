@@ -7,15 +7,28 @@ async function showHome() {
       <section class="section">
         <div class="section-header">
           <h2>Projects</h2>
-          <button class="btn btn-primary" onclick="_showAddProject()">Add Project</button>
+          <button class="btn" onclick="_showAddProject()">Add Project</button>
         </div>
         <div id="add-project-form" class="add-form" style="display:none">
-          <input type="text" id="project-name" placeholder="Project name (optional)" class="input">
-          <input type="text" id="project-path" placeholder="/path/to/gradle/project" class="input input-wide">
-          <button class="btn btn-primary" onclick="_addProject()">Add</button>
-          <button class="btn" onclick="_hideAddProject()">Cancel</button>
+          <div class="add-form-row">
+            <input type="text" id="project-name" placeholder="Project name (optional)" class="input">
+            <input type="text" id="project-path" placeholder="/path/to/gradle/project" class="input input-wide">
+          </div>
+          <div id="template-selector" class="template-selector"></div>
+          <div class="add-form-row">
+            <button class="btn btn-primary btn-lg" onclick="_addProject()">Add Project</button>
+            <button class="btn" onclick="_hideAddProject()">Cancel</button>
+          </div>
         </div>
         <div id="projects-list" class="card-list"></div>
+      </section>
+      <section class="section">
+        <div class="section-header">
+          <h2>Templates</h2>
+          <button class="btn" onclick="_showCreateTemplate()">Create Template</button>
+        </div>
+        <div id="create-template-form" style="display:none"></div>
+        <div id="templates-list" class="template-list"></div>
       </section>
       <section class="section">
         <h2>Recent Scans</h2>
@@ -27,15 +40,19 @@ async function showHome() {
 
   return () => {
     for (const id of Object.keys(_pollTimers)) _stopPolling(id);
+    _editingProfiles = {};
+    _profileEditing = -1;
   };
 }
 
 async function _loadHome() {
-  const [projectsList, scansList] = await Promise.all([
+  const [projectsList, scansList, templatesList] = await Promise.all([
     apiGet('/api/projects'),
     apiGet('/api/scans'),
+    apiGet('/api/templates'),
   ]);
   _renderProjects(projectsList);
+  _renderTemplates(templatesList);
   _renderScans(scansList);
 }
 
@@ -64,7 +81,8 @@ function _renderProjects(projectsList) {
     <div class="profiles-form" id="profiles-${p.id}" style="display:none">
       <div class="profiles-list" id="profiles-list-${p.id}"></div>
       <div class="profiles-actions">
-        <button class="btn btn-sm" onclick="_addProfile('${p.id}')">Add Profile</button>
+        <button class="btn btn-sm" onclick="_addProfileFromTemplate('${p.id}')">Add from Template</button>
+        <button class="btn btn-sm" onclick="_addCustomProfile('${p.id}')">Add Custom</button>
         <button class="btn btn-sm btn-primary" onclick="_saveProfiles('${p.id}')">Save</button>
         <button class="btn btn-sm" onclick="_hideProfiles('${p.id}')">Cancel</button>
       </div>
@@ -104,20 +122,148 @@ function _renderScans(scansList) {
   }).join('');
 }
 
+// --- Templates ---
+
+function _renderTemplates(templatesList) {
+  const el = document.getElementById('templates-list');
+  if (!templatesList.length) {
+    el.innerHTML = '<div class="empty-state">No templates. Built-in templates are always available.</div>';
+    return;
+  }
+  el.innerHTML = templatesList.map(t => `
+    <div class="template-list-card">
+      <div class="template-list-info">
+        <span class="template-name">${escHtml(t.name)}</span>
+        <span class="template-tool">${escHtml(t.tool)}</span>
+        ${t.builtin ? '<span class="template-badge">built-in</span>' : ''}
+      </div>
+      <div class="template-list-detail">${escHtml(t.description)}</div>
+      <div class="template-list-paths">
+        <span>failures: <code>${escHtml(t.failures_dir)}</code></span>
+        ${t.delta_suffix ? `<span>delta suffix: <code>${escHtml(t.delta_suffix)}</code></span>` : ''}
+        ${t.actual_suffix ? `<span>actual suffix: <code>${escHtml(t.actual_suffix)}</code></span>` : ''}
+      </div>
+      ${!t.builtin ? `<div class="template-list-actions"><button class="btn btn-sm" onclick="_editTemplate('${escAttr(t.id)}')">Edit</button><button class="btn btn-sm btn-danger-text" onclick="_deleteTemplate('${escAttr(t.id)}')">Delete</button></div>` : ''}
+    </div>
+  `).join('');
+}
+
+function _showCreateTemplate() {
+  const el = document.getElementById('create-template-form');
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div class="add-form">
+      <div class="add-form-row">
+        <input class="input input-sm" id="tmpl-name" placeholder="Template name">
+        <input class="input input-sm" id="tmpl-tool" placeholder="Tool (e.g., paparazzi)" value="paparazzi">
+      </div>
+      <div class="add-form-row">
+        <input class="input input-sm input-wide" id="tmpl-desc" placeholder="Description">
+      </div>
+      <div class="add-form-row">
+        <input class="input input-sm input-wide" id="tmpl-failures" placeholder="Failures dir (e.g., build/paparazzi/failures)">
+      </div>
+      <div class="add-form-row">
+        <input class="input input-sm" id="tmpl-delta-prefix" placeholder="Delta prefix" value="delta-" style="width:100px">
+        <input class="input input-sm" id="tmpl-delta-suffix" placeholder="Delta suffix" style="width:100px">
+        <input class="input input-sm" id="tmpl-actual-suffix" placeholder="Actual suffix" style="width:100px">
+      </div>
+      <div class="add-form-row">
+        <textarea class="input input-sm input-wide" id="tmpl-patterns" rows="3" placeholder="Golden patterns (one per line, use {name})"></textarea>
+      </div>
+      <div class="add-form-row">
+        <button class="btn btn-primary btn-sm" onclick="_createTemplate()">Create</button>
+        <button class="btn btn-sm" onclick="document.getElementById('create-template-form').style.display='none'">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+async function _createTemplate() {
+  const name = document.getElementById('tmpl-name').value.trim();
+  const tool = document.getElementById('tmpl-tool').value.trim();
+  if (!name) return;
+  await apiPost('/api/templates', {
+    name,
+    tool: tool || 'custom',
+    description: document.getElementById('tmpl-desc').value.trim(),
+    failures_dir: document.getElementById('tmpl-failures').value.trim(),
+    golden_patterns: document.getElementById('tmpl-patterns').value.split('\n').filter(Boolean),
+    delta_prefix: document.getElementById('tmpl-delta-prefix').value,
+    delta_suffix: document.getElementById('tmpl-delta-suffix').value,
+    actual_suffix: document.getElementById('tmpl-actual-suffix').value,
+  });
+  document.getElementById('create-template-form').style.display = 'none';
+  await _loadHome();
+}
+
+async function _editTemplate(id) {
+  const tmps = await apiGet('/api/templates');
+  const t = tmps.find(x => x.id === id);
+  if (!t) return;
+  const el = document.getElementById('create-template-form');
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div class="add-form">
+      <div class="add-form-row">
+        <input class="input input-sm" id="tmpl-name" placeholder="Template name" value="${escAttr(t.name)}">
+        <input class="input input-sm" id="tmpl-tool" placeholder="Tool" value="${escAttr(t.tool)}">
+      </div>
+      <div class="add-form-row">
+        <input class="input input-sm input-wide" id="tmpl-desc" placeholder="Description" value="${escAttr(t.description)}">
+      </div>
+      <div class="add-form-row">
+        <input class="input input-sm input-wide" id="tmpl-failures" placeholder="Failures dir" value="${escAttr(t.failures_dir)}">
+      </div>
+      <div class="add-form-row">
+        <input class="input input-sm" id="tmpl-delta-prefix" placeholder="Delta prefix" value="${escAttr(t.delta_prefix || 'delta-')}" style="width:100px">
+        <input class="input input-sm" id="tmpl-delta-suffix" placeholder="Delta suffix" value="${escAttr(t.delta_suffix || '')}" style="width:100px">
+        <input class="input input-sm" id="tmpl-actual-suffix" placeholder="Actual suffix" value="${escAttr(t.actual_suffix || '')}" style="width:100px">
+      </div>
+      <div class="add-form-row">
+        <textarea class="input input-sm input-wide" id="tmpl-patterns" rows="3" placeholder="Golden patterns">${escHtml((t.golden_patterns || []).join('\n'))}</textarea>
+      </div>
+      <div class="add-form-row">
+        <button class="btn btn-primary btn-sm" onclick="_updateTemplate('${escAttr(id)}')">Save</button>
+        <button class="btn btn-sm" onclick="document.getElementById('create-template-form').style.display='none'">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+async function _updateTemplate(id) {
+  await apiPost('/api/templates', {
+    id,
+    name: document.getElementById('tmpl-name').value.trim(),
+    tool: document.getElementById('tmpl-tool').value.trim() || 'custom',
+    description: document.getElementById('tmpl-desc').value.trim(),
+    failures_dir: document.getElementById('tmpl-failures').value.trim(),
+    golden_patterns: document.getElementById('tmpl-patterns').value.split('\n').filter(Boolean),
+    delta_prefix: document.getElementById('tmpl-delta-prefix').value,
+    delta_suffix: document.getElementById('tmpl-delta-suffix').value,
+    actual_suffix: document.getElementById('tmpl-actual-suffix').value,
+  });
+  document.getElementById('create-template-form').style.display = 'none';
+  await _loadHome();
+}
+
+async function _deleteTemplate(id) {
+  await apiDelete(`/api/templates/${id}`);
+  await _loadHome();
+}
+
 // --- Profile management ---
 
 let _editingProfiles = {}; // projectId -> profiles array being edited
 
-function _showProfiles(projectId) {
+async function _showProfiles(projectId) {
   const el = document.getElementById(`profiles-${projectId}`);
   if (!el) return;
   el.style.display = 'block';
-  // Load current profiles from the rendered data
-  apiGet('/api/projects').then(projects => {
-    const p = projects.find(x => x.id === projectId);
-    _editingProfiles[projectId] = JSON.parse(JSON.stringify(p?.profiles || []));
-    _renderProfilesList(projectId);
-  });
+  const projects = await apiGet('/api/projects');
+  const p = projects.find(x => x.id === projectId);
+  _editingProfiles[projectId] = JSON.parse(JSON.stringify(p?.profiles || []));
+  _renderProfilesList(projectId);
 }
 
 function _hideProfiles(projectId) {
@@ -129,33 +275,105 @@ function _hideProfiles(projectId) {
 function _renderProfilesList(projectId) {
   const el = document.getElementById(`profiles-list-${projectId}`);
   const profiles = _editingProfiles[projectId] || [];
-  el.innerHTML = profiles.map((pr, i) => {
-    const gp = pr.golden_patterns || [];
-    const gpText = gp.join('\n');
-    return `
-    <div class="profile-row">
-      <input class="input input-sm" value="${escAttr(pr.name)}" placeholder="name" style="width:80px" onchange="_editingProfiles['${projectId}'][${i}].name=this.value">
-      <input class="input input-sm input-wide" value="${escAttr(pr.failures_dir)}" placeholder="failures dir (relative)" onchange="_editingProfiles['${projectId}'][${i}].failures_dir=this.value">
-      <textarea class="input input-sm input-wide" rows="${Math.max(1, gp.length)}" placeholder="golden patterns (one per line, use {name})" onchange="_editingProfiles['${projectId}'][${i}].golden_patterns=this.value.split('\\n').filter(Boolean)">${escHtml(gpText)}</textarea>
-      ${pr.name !== 'baseline' ? `<button class="btn btn-sm btn-danger-text" onclick="_removeProfile('${projectId}', ${i})">X</button>` : ''}
-    </div>`;
-  }).join('');
+  el.innerHTML = profiles.map((pr, i) => `
+    <div class="profile-card ${_profileEditing === i ? 'profile-editing' : ''}">
+      <div class="profile-card-header">
+        <span class="profile-card-name">${escHtml(pr.name)}</span>
+        <span class="profile-card-dir">${escHtml(pr.failures_dir)}</span>
+        <div class="profile-card-actions">
+          <button class="btn btn-sm" onclick="_editProfile('${projectId}', ${i})">${_profileEditing === i ? 'Close' : 'Edit'}</button>
+          <button class="btn btn-sm btn-danger-text" onclick="_removeProfile('${projectId}', ${i})">Remove</button>
+        </div>
+      </div>
+      ${_profileEditing === i ? _renderProfileEditor(projectId, i, pr) : ''}
+    </div>
+  `).join('');
 }
 
-function _addProfile(projectId) {
-  _editingProfiles[projectId] = _editingProfiles[projectId] || [];
-  _editingProfiles[projectId].push({ name: '', failures_dir: 'build/paparazzi/', golden_patterns: [] });
+let _profileEditing = -1;
+
+function _renderProfileEditor(projectId, index, pr) {
+  const gp = pr.golden_patterns || [];
+  return `
+    <div class="profile-editor">
+      <div class="profile-editor-row">
+        <label>Name</label>
+        <input class="input input-sm" value="${escAttr(pr.name)}" onchange="_editingProfiles['${projectId}'][${index}].name=this.value">
+      </div>
+      <div class="profile-editor-row">
+        <label>Failures dir</label>
+        <input class="input input-sm" value="${escAttr(pr.failures_dir)}" onchange="_editingProfiles['${projectId}'][${index}].failures_dir=this.value">
+      </div>
+      <div class="profile-editor-row">
+        <label>Delta prefix</label>
+        <input class="input input-sm" value="${escAttr(pr.delta_prefix || 'delta-')}" style="width:100px" onchange="_editingProfiles['${projectId}'][${index}].delta_prefix=this.value">
+        <label>Delta suffix</label>
+        <input class="input input-sm" value="${escAttr(pr.delta_suffix || '')}" style="width:100px" onchange="_editingProfiles['${projectId}'][${index}].delta_suffix=this.value">
+        <label>Actual suffix</label>
+        <input class="input input-sm" value="${escAttr(pr.actual_suffix || '')}" style="width:100px" onchange="_editingProfiles['${projectId}'][${index}].actual_suffix=this.value">
+      </div>
+      <div class="profile-editor-row">
+        <label>Golden patterns (one per line, use {name})</label>
+        <textarea class="input input-sm" rows="${Math.max(2, gp.length)}" onchange="_editingProfiles['${projectId}'][${index}].golden_patterns=this.value.split('\\n').filter(Boolean)">${escHtml(gp.join('\n'))}</textarea>
+      </div>
+    </div>
+  `;
+}
+
+function _editProfile(projectId, index) {
+  _profileEditing = _profileEditing === index ? -1 : index;
   _renderProfilesList(projectId);
 }
 
 function _removeProfile(projectId, index) {
   _editingProfiles[projectId].splice(index, 1);
+  _profileEditing = -1;
+  _renderProfilesList(projectId);
+}
+
+async function _addProfileFromTemplate(projectId) {
+  const tmps = await apiGet('/api/templates');
+  const existing = (_editingProfiles[projectId] || []).map(p => p.template_id);
+  // Show templates not already added
+  const available = tmps.filter(t => !existing.includes(t.id));
+  if (!available.length) {
+    showToast('All templates already added', 'info');
+    return;
+  }
+  // Add first available as a quick action, or show picker
+  const pick = prompt('Add template:\\n' + available.map((t, i) => `${i + 1}. ${t.name} (${t.tool})`).join('\\n') + '\\n\\nEnter number:');
+  if (!pick) return;
+  const idx = parseInt(pick) - 1;
+  if (idx >= 0 && idx < available.length) {
+    const t = available[idx];
+    _editingProfiles[projectId].push({
+      name: t.name,
+      failures_dir: t.failures_dir,
+      golden_dir: t.golden_dir || '',
+      golden_patterns: t.golden_patterns || [],
+      delta_prefix: t.delta_prefix || 'delta-',
+      delta_suffix: t.delta_suffix || '',
+      actual_suffix: t.actual_suffix || '',
+      template_id: t.id,
+    });
+    _renderProfilesList(projectId);
+  }
+}
+
+function _addCustomProfile(projectId) {
+  _editingProfiles[projectId] = _editingProfiles[projectId] || [];
+  _editingProfiles[projectId].push({
+    name: '', failures_dir: '', golden_patterns: [],
+    delta_prefix: 'delta-', delta_suffix: '', actual_suffix: '',
+  });
+  _profileEditing = _editingProfiles[projectId].length - 1;
   _renderProfilesList(projectId);
 }
 
 async function _saveProfiles(projectId) {
   const profiles = _editingProfiles[projectId].filter(p => p.name && p.failures_dir);
   await apiPut(`/api/projects/${projectId}/profiles`, { profiles });
+  _profileEditing = -1;
   _hideProfiles(projectId);
   await _loadHome();
 }
@@ -170,8 +388,20 @@ function _aggregateSnapshotStats(modules) {
   return snapshots > 0 ? { snapshots, failures } : null;
 }
 
-function _showAddProject() {
-  document.getElementById('add-project-form').style.display = 'flex';
+async function _showAddProject() {
+  document.getElementById('add-project-form').style.display = 'block';
+  const sel = document.getElementById('template-selector');
+  const tmps = await apiGet('/api/templates');
+  sel.innerHTML = tmps.map(t => `
+    <label class="template-card">
+      <input type="checkbox" value="${escAttr(t.id)}" ${t.id === 'paparazzi' ? 'checked' : ''}>
+      <div class="template-info">
+        <span class="template-name">${escHtml(t.name)}</span>
+        <span class="template-tool">${escHtml(t.tool)}</span>
+        <span class="template-desc">${escHtml(t.description)}</span>
+      </div>
+    </label>
+  `).join('');
 }
 
 function _hideAddProject() {
@@ -182,7 +412,9 @@ async function _addProject() {
   const name = document.getElementById('project-name').value.trim();
   const path = document.getElementById('project-path').value.trim();
   if (!path) return;
-  await apiPost('/api/projects', { name: name || undefined, path });
+  const checkboxes = document.querySelectorAll('#template-selector input:checked');
+  const template_ids = Array.from(checkboxes).map(cb => cb.value);
+  await apiPost('/api/projects', { name: name || undefined, path, template_ids: template_ids.length ? template_ids : undefined });
   _hideAddProject();
   await _loadHome();
 }

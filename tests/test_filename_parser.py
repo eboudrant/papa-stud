@@ -1,6 +1,6 @@
 import unittest
 
-from server.filename_parser import base_filename, parse_filename
+from server.filename_parser import parse_filename
 
 
 class TestParseFilename(unittest.TestCase):
@@ -30,8 +30,9 @@ class TestParseFilename(unittest.TestCase):
         result = parse_filename("com.example_MyTest_testMethod_long_snapshot_name.png")
         self.assertEqual(result["snapshot_name"], "long_snapshot_name")
 
-    def test_delta_prefix_stripped(self):
-        result = parse_filename("delta-com.example_LoginTest_testLogin.png")
+    def test_no_delta_prefix_expected(self):
+        # Callers strip delta- via _delta_to_base before calling parse_filename
+        result = parse_filename("com.example_LoginTest_testLogin.png")
         self.assertEqual(result["package"], "com.example")
         self.assertEqual(result["class_name"], "LoginTest")
         self.assertEqual(result["method"], "testLogin")
@@ -51,20 +52,6 @@ class TestParseFilename(unittest.TestCase):
     def test_raw_always_present(self):
         result = parse_filename("com.example_Foo_bar.png")
         self.assertEqual(result["raw"], "com.example_Foo_bar.png")
-
-
-class TestBaseFilename(unittest.TestCase):
-    def test_strips_delta_prefix(self):
-        self.assertEqual(
-            base_filename("delta-com.example_Test_method.png"),
-            "com.example_Test_method.png",
-        )
-
-    def test_no_prefix_unchanged(self):
-        self.assertEqual(
-            base_filename("com.example_Test_method.png"),
-            "com.example_Test_method.png",
-        )
 
 
 if __name__ == "__main__":

@@ -228,7 +228,7 @@ function _renderProfilePills(data) {
   const profiles = new Set();
   for (const m of data.modules || []) {
     for (const p of Object.keys(m.profile_counts || {})) {
-      if ((m.profile_counts[p] || 0) > 0) profiles.add(p);
+      profiles.add(p);
     }
   }
   if (profiles.size <= 1) {

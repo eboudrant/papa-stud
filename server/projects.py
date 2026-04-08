@@ -67,17 +67,36 @@ def list_projects():
         return projects
 
 
-DEFAULT_PROFILES = [
-    {
-        "name": "baseline",
-        "failures_dir": "build/paparazzi/failures",
-        "golden_dir": "src/test/snapshots/images",
-        "golden_patterns": ["src/test/snapshots/images/{name}.png"],
-    }
-]
+def _default_profiles():
+    from server.templates import get_template, template_to_profile
+
+    t = get_template("paparazzi")
+    if t:
+        return [template_to_profile(t)]
+    return [
+        {
+            "name": "Paparazzi",
+            "failures_dir": "build/paparazzi/failures",
+            "golden_patterns": ["src/test/snapshots/images/{name}.png"],
+        }
+    ]
 
 
-def add_project(name, path):
+DEFAULT_PROFILES = _default_profiles()
+
+
+def add_project(name, path, template_ids=None):
+    from server import templates as tmpl
+
+    if template_ids:
+        profiles = []
+        for tid in template_ids:
+            t = tmpl.get_template(tid)
+            if t:
+                profiles.append(tmpl.template_to_profile(t))
+    else:
+        profiles = list(DEFAULT_PROFILES)
+
     with _lock:
         projects = _read_json(_projects_path()) or []
         project = {
@@ -85,7 +104,7 @@ def add_project(name, path):
             "name": name,
             "path": path,
             "added": datetime.now(timezone.utc).isoformat(),
-            "profiles": list(DEFAULT_PROFILES),
+            "profiles": profiles,
         }
         projects.append(project)
         _write_json(_projects_path(), projects)

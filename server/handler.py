@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from server import projects, scan_jobs, video
+from server import projects, scan_jobs, templates, video
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -61,6 +61,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "ffmpeg": video.has_ffmpeg(),
                 }
             )
+        elif path == "/api/templates":
+            self._json_response(templates.list_templates())
         elif path == "/api/projects":
             self._json_response(projects.list_projects())
         elif path == "/api/scans":
@@ -125,8 +127,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._send(400, '{"error":"path required"}', "application/json")
                 return
             name = body.get("name", Path(body["path"]).name)
-            project = projects.add_project(name, body["path"])
+            template_ids = body.get("template_ids")
+            project = projects.add_project(name, body["path"], template_ids)
             self._json_response(project, 201)
+
+        elif path == "/api/templates":
+            body = self._read_body_json()
+            if not body or "name" not in body:
+                self._send(400, '{"error":"name required"}', "application/json")
+                return
+            t = templates.create_template(body)
+            self._json_response(t, 201)
 
         elif path.startswith("/api/projects/") and path.endswith("/scan"):
             parts = path.split("/")
@@ -276,6 +287,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _handle_api_delete(self):
         path = urlparse(self.path).path
+
+        if path.startswith("/api/templates/"):
+            parts = path.split("/")
+            if len(parts) == 4:
+                if templates.delete_template(parts[3]):
+                    self._send(204, "")
+                else:
+                    self._send(
+                        400,
+                        '{"error":"cannot delete built-in template"}',
+                        "application/json",
+                    )
+                return
 
         if path.startswith("/api/projects/"):
             parts = path.split("/")

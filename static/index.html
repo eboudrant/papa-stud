@@ -9,12 +9,32 @@
 <body>
   <header>
     <a href="#/">
-      <h1>Papa Stud</h1>
-      <span class="tag">paparazzi</span>
+      <h1>Papa Stud<span class="title-io">.io</span></h1>
     </a>
+    <button class="btn-theme" onclick="_toggleTheme()" title="Toggle theme">&#9681;</button>
   </header>
   <div id="content"></div>
 
+  <script>
+    // Theme: load from localStorage before paint
+    (function() {
+      const t = localStorage.getItem('papastud_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+    function _toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = current === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('papastud_theme', next);
+    }
+    // Ctrl+Shift+L to toggle theme
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'L') {
+        e.preventDefault();
+        _toggleTheme();
+      }
+    });
+  </script>
   <script src="/static/js/api.js"></script>
   <script src="/static/js/router.js"></script>
   <script src="/static/js/home.js"></script>

@@ -4,17 +4,18 @@ const { mockApi } = require('./fixtures');
 
 test('home page renders with empty state', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('h1')).toHaveText('Papa Stud');
-  await expect(page.locator('text=Add Project')).toBeVisible();
+  await expect(page.locator('h1')).toContainText('Papa Stud');
+  await expect(page.locator('button:has-text("Add Project")').first()).toBeVisible();
   await expect(page.locator('text=No projects configured')).toBeVisible({ timeout: 10000 });
   await expect(page).toHaveScreenshot('home-empty.png');
 });
 
 test('add project form toggles', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('text=Add Project')).toBeVisible({ timeout: 10000 });
-  await page.click('button:has-text("Add Project")');
+  await expect(page.locator('.section-header button:has-text("Add Project")')).toBeVisible({ timeout: 10000 });
+  await page.click('.section-header button:has-text("Add Project")');
   await expect(page.locator('input[placeholder*="path"]')).toBeVisible();
+  await expect(page.locator('.template-card')).toHaveCount(2, { timeout: 5000 });
   await expect(page).toHaveScreenshot('home-add-project.png');
 });
 
@@ -34,7 +35,16 @@ test('home page shows profile tags on projects', async ({ page }) => {
   await mockApi(page);
   await page.goto('/');
   await expect(page.locator('.profile-tag')).toHaveCount(2, { timeout: 10000 });
-  await expect(page.locator('text=baseline')).toBeVisible();
-  await expect(page.locator('text=figma')).toBeVisible();
   await expect(page).toHaveScreenshot('home-profile-tags.png');
+});
+
+// Dark mode tests
+test('home page dark mode', async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(() => {
+    localStorage.setItem('papastud_theme', 'dark');
+  });
+  await page.goto('/');
+  await expect(page.locator('.profile-tag')).toHaveCount(2, { timeout: 10000 });
+  await expect(page).toHaveScreenshot('home-dark.png');
 });

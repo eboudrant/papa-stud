@@ -149,11 +149,8 @@ def start_watching(scan_id):
 
     def on_module_change(module_name, module_path):
         mp = Path(module_path)
-        failures_dir = mp / "build" / "paparazzi" / "failures"
-        if not failures_dir.is_dir():
-            failures_dir = None
         module_data, module_failures = process_single_module(
-            failures_dir, module_name, mp, scan_profiles
+            None, module_name, mp, scan_profiles
         )
         projects.update_scan_module(scan_id, module_name, module_data, module_failures)
 

@@ -16,10 +16,6 @@ def parse_filename(filename):
     if name.endswith(".png"):
         name = name[:-4]
 
-    # Remove delta- prefix if present
-    if name.startswith("delta-"):
-        name = name[6:]
-
     parts = name.split("_")
     if len(parts) < 2:
         return _fallback(raw)
@@ -72,10 +68,3 @@ def _fallback(raw):
         "snapshot_name": None,
         "raw": raw,
     }
-
-
-def base_filename(filename):
-    """Strip delta- prefix and return the base snapshot filename."""
-    if filename.startswith("delta-"):
-        return filename[6:]
-    return filename
