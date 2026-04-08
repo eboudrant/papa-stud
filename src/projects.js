@@ -28,7 +28,11 @@ function scansDir() {
   }
   return d;
 }
-function scanPath(scanId) { return path.join(scansDir(), `${scanId}.json`); }
+function sanitizeId(id) {
+  return String(id).replace(/[^a-zA-Z0-9._-]/g, '');
+}
+
+function scanPath(scanId) { return path.join(scansDir(), `${sanitizeId(scanId)}.json`); }
 function indexPath() { return path.join(scansDir(), 'index.json'); }
 
 function readJson(p) {
@@ -319,9 +323,12 @@ function batchUpdateStatus(scanId, filenames, status) {
 }
 
 function isPathUnderProject(filePath) {
-  const projects = listProjects();
+  const allProjects = listProjects();
   const resolved = path.resolve(filePath);
-  return projects.some(p => resolved.startsWith(path.resolve(p.path)));
+  return allProjects.some(p => {
+    const projectRoot = path.resolve(p.path) + path.sep;
+    return resolved.startsWith(projectRoot) || resolved === path.resolve(p.path);
+  });
 }
 
 function computeStats(failures) {

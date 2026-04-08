@@ -13,6 +13,27 @@ const video = require('./video');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
 
+// Simple rate limiter: max requests per window per IP
+function rateLimit(maxRequests = 60, windowMs = 60000) {
+  const hits = new Map();
+  return (req, res, next) => {
+    const ip = req.ip;
+    const now = Date.now();
+    const record = hits.get(ip);
+    if (!record || now - record.start > windowMs) {
+      hits.set(ip, { start: now, count: 1 });
+      return next();
+    }
+    record.count++;
+    if (record.count > maxRequests) {
+      return res.status(429).json({ error: 'too many requests' });
+    }
+    next();
+  };
+}
+
+const fsRateLimit = rateLimit(120, 60000);
+
 function createRouter() {
   const router = express.Router();
 
@@ -59,17 +80,21 @@ function createRouter() {
     else res.status(404).json({ error: 'job not found' });
   });
 
-  router.get('/api/images', (req, res) => {
+  router.get('/api/images', fsRateLimit, (req, res) => {
     const filePath = req.query.path;
     if (!filePath) return res.status(400).json({ error: 'path required' });
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'file not found' });
-    if (!projects.isPathUnderProject(filePath)) return res.status(403).json({ error: 'forbidden' });
-    res.sendFile(filePath);
+    // Resolve to absolute path and validate it's under a registered project
+    const resolved = path.resolve(filePath);
+    if (resolved !== filePath && !path.isAbsolute(filePath)) {
+      return res.status(400).json({ error: 'absolute path required' });
+    }
+    if (!projects.isPathUnderProject(resolved)) return res.status(403).json({ error: 'forbidden' });
+    res.sendFile(resolved);
   });
 
   // --- API POST ---
 
-  router.post('/api/projects', (req, res) => {
+  router.post('/api/projects', fsRateLimit, (req, res) => {
     const body = req.body;
     if (!body || !body.path) return res.status(400).json({ error: 'path required' });
     const name = body.name || path.basename(body.path);
@@ -109,16 +134,16 @@ function createRouter() {
     }
   });
 
-  router.post('/api/scans/:id/video', (req, res) => {
+  router.post('/api/scans/:id/video', fsRateLimit, (req, res) => {
     const scan = projects.getScan(req.params.id, { page: 0, size: 10000 });
     if (!scan) return res.status(404).json({ error: 'scan not found' });
     const failures = (scan.failures || []).filter(f => f.delta_path);
     if (!failures.length) return res.status(400).json({ error: 'no failures to export' });
 
-    const tmpPath = path.join(os.tmpdir(), `papastud-${req.params.id}.mp4`);
+    const safeId = req.params.id.replace(/[^a-zA-Z0-9._-]/g, '');
+    const tmpPath = path.join(os.tmpdir(), `papastud-${safeId}.mp4`);
     try {
       video.generateVideo(failures, tmpPath);
-      const safeId = req.params.id.replace(/[\r\n"]/g, '');
       res.set('Content-Disposition', `attachment; filename="papa-stud-${safeId}.mp4"`);
       res.sendFile(tmpPath, () => {
         try { fs.unlinkSync(tmpPath); } catch {}
