@@ -56,3 +56,22 @@ test('detail slider mode shows handle', async ({ page }) => {
   await expect(page.locator('.slider-labels')).toBeVisible();
   await expect(page).toHaveScreenshot('detail-slider.png');
 });
+
+// Dark mode tests
+test('review grid dark mode', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('papastud_theme', 'dark');
+  });
+  await page.goto('/#/scans/20260403-120000');
+  await expect(page.locator('.thumb-card')).toHaveCount(3, { timeout: 10000 });
+  await expect(page).toHaveScreenshot('review-grid-dark.png');
+});
+
+test('detail view dark mode', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('papastud_theme', 'dark');
+  });
+  await page.goto('/#/scans/20260403-120000/review/com.example_LoginTest_testSignup.png');
+  await expect(page.locator('.detail-title')).toHaveText('LoginTest', { timeout: 10000 });
+  await expect(page).toHaveScreenshot('detail-dark.png');
+});

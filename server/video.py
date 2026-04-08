@@ -19,6 +19,7 @@ FRAME_MS = 160
 BG_COLOR = (26, 26, 26)
 BAR_HEIGHT = 30
 BAR_Y = 8
+STICK_FIGURE = False  # Feature flag: set True to enable stick figure animation
 
 
 def has_ffmpeg():
@@ -67,7 +68,10 @@ def generate_video(failures, output_path):
             filename_esc = _escape_drawtext(filename)
             info_esc = _escape_drawtext(info)
             bg_hex = f"0x{BG_COLOR[0]:02x}{BG_COLOR[1]:02x}{BG_COLOR[2]:02x}"
-            img_h = FRAME_HEIGHT - BAR_HEIGHT - 90
+            # Bottom zone: info(14px) + padding + filename(18px) + padding + progress bar
+            overlay_h = 38 if STICK_FIGURE else 8
+            bottom_zone = 20 + 18 + 6 + 14 + 10 + overlay_h  # ~76-106px
+            img_h = FRAME_HEIGHT - 20 - bottom_zone  # 20px top padding
 
             cmds.append(
                 [
@@ -82,15 +86,15 @@ def generate_video(failures, output_path):
                         f"[0]scale={FRAME_WIDTH - 40}:{img_h}"
                         f":force_original_aspect_ratio=decrease,"
                         f"pad={FRAME_WIDTH}:{FRAME_HEIGHT}"
-                        f":(ow-iw)/2:{BAR_HEIGHT + 50}+({img_h}-ih)/2"
+                        f":(ow-iw)/2:10+({img_h}-ih)/2"
                         f":color={bg_hex}[bg];"
-                        f"[bg][1]overlay=0:0,"
-                        f"drawtext=text='{filename_esc}'"
-                        f":fontsize=18:fontcolor=white"
-                        f":x=(w-text_w)/2:y=h-55,"
+                        f"[bg][1]overlay=0:{FRAME_HEIGHT}-overlay_h,"
                         f"drawtext=text='{info_esc}'"
                         f":fontsize=14:fontcolor=gray"
-                        f":x=(w-text_w)/2:y=h-28"
+                        f":x=(w-text_w)/2:y={FRAME_HEIGHT}-{bottom_zone}+4,"
+                        f"drawtext=text='{filename_esc}'"
+                        f":fontsize=18:fontcolor=white"
+                        f":x=(w-text_w)/2:y={FRAME_HEIGHT}-{overlay_h}-28"
                     ),
                     "-frames:v",
                     "1",
@@ -146,8 +150,9 @@ def generate_video(failures, output_path):
 
 
 def _render_overlay(progress, frame_idx, total_frames, trip_frames):
-    """Render a transparent PNG overlay with progress bar + running stick figure."""
-    bar_top = 38  # bar sits below the stick figure
+    """Render a transparent PNG overlay with progress bar (+ optional stick figure)."""
+    fig_space = 38 if STICK_FIGURE else 0
+    bar_top = fig_space  # bar sits below the stick figure (if enabled)
     w, h = FRAME_WIDTH, bar_top + 8
     pixels = [[(0, 0, 0, 0) for _ in range(w)] for _ in range(h)]
 
@@ -162,8 +167,8 @@ def _render_overlay(progress, frame_idx, total_frames, trip_frames):
         for x in range(40, fill_end):
             pixels[y][x] = (34, 197, 94, 255)
 
-    # Stick figure — only for videos with 30+ frames
-    if total_frames > 30:
+    # Stick figure — behind feature flag
+    if STICK_FIGURE and total_frames > 30:
         fig_x = 40 + int((w - 80) * progress)
         fig_y = bar_top - 25
         _draw_stick_figure(pixels, fig_x, fig_y, w, h, frame_idx, trip_frames)

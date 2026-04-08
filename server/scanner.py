@@ -10,7 +10,7 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from server.filename_parser import base_filename, parse_filename
+from server.filename_parser import parse_filename
 
 MTIME_CLUSTER_TOLERANCE = 60.0
 
@@ -62,6 +62,9 @@ def process_single_module(failures_dir, module_name, module_path, profiles=None)
                 xml_mtime,
                 golden_patterns=gp,
                 diff_pcts=diff_pcts,
+                delta_prefix=profile.get("delta_prefix", "delta-"),
+                delta_suffix=profile.get("delta_suffix", ""),
+                actual_suffix=profile.get("actual_suffix", ""),
             )
             module_failures.extend(pf)
             profile_counts[pname] = len(pf)
@@ -124,13 +127,19 @@ def _resolve_golden(module_path, golden_patterns, snapshot_name):
     """Try each golden pattern in order, return first existing path or None.
 
     Patterns use {name} as placeholder for the snapshot name (without .png).
-    Example: "src/androidMain/assets/primitive/all/{name}@4x.png"
+    Supports ** for recursive directory matching (glob).
     """
     name = snapshot_name[:-4] if snapshot_name.endswith(".png") else snapshot_name
     for pattern in golden_patterns:
-        candidate = module_path / pattern.replace("{name}", name)
-        if candidate.is_file():
-            return candidate
+        resolved = pattern.replace("{name}", name)
+        if "**" in resolved:
+            matches = list(module_path.glob(resolved))
+            if matches:
+                return matches[0]
+        else:
+            candidate = module_path / resolved
+            if candidate.is_file():
+                return candidate
     return None
 
 
@@ -143,6 +152,9 @@ def _process_profile(
     xml_mtime,
     golden_patterns=None,
     diff_pcts=None,
+    delta_prefix="delta-",
+    delta_suffix="",
+    actual_suffix="",
 ):
     """Process one profile's failures for a module. Returns list of failure dicts."""
     if not golden_patterns:
@@ -150,28 +162,26 @@ def _process_profile(
     results = []
     if failures_dir and Path(failures_dir).is_dir():
         failures_dir = Path(failures_dir)
-        current = _detect_current_failures(failures_dir)
+        current = _detect_current_failures(failures_dir, delta_prefix, delta_suffix)
         if xml_mtime > 0 and current and test_stats and test_stats["failed"] == 0:
             current = [f for f in current if f.stat().st_mtime > xml_mtime]
 
-        # Stale golden check: skip if ANY matching golden is newer than delta
-        if current and golden_patterns:
-            filtered = []
-            for f in current:
-                golden = _resolve_golden(
-                    module_path, golden_patterns, base_filename(f.name)
-                )
-                if golden and golden.stat().st_mtime > f.stat().st_mtime:
-                    continue
-                filtered.append(f)
-            current = filtered
+        # Resolve goldens once per failure (cache to avoid repeated ** globs)
+        golden_cache = {}
+        for f in current:
+            base = _delta_to_base(f.name, delta_prefix, delta_suffix)
+            golden_cache[f.name] = _resolve_golden(module_path, golden_patterns, base)
 
         for delta_path in current:
-            fname = delta_path.name
-            base = base_filename(fname)
+            base = _delta_to_base(delta_path.name, delta_prefix, delta_suffix)
             parsed = parse_filename(base)
-            actual_path = failures_dir / base
-            golden_path = _resolve_golden(module_path, golden_patterns, base)
+            if actual_suffix:
+                stem = base[:-4] if base.endswith(".png") else base
+                actual_name = f"{stem}{actual_suffix}.png"
+            else:
+                actual_name = base
+            actual_path = failures_dir / actual_name
+            golden_path = golden_cache.get(delta_path.name)
 
             results.append(
                 {
@@ -193,6 +203,19 @@ def _process_profile(
                 }
             )
     return results
+
+
+def _delta_to_base(filename, delta_prefix, delta_suffix):
+    """Convert a delta filename to the base snapshot name."""
+    name = filename
+    if delta_prefix and name.startswith(delta_prefix):
+        name = name[len(delta_prefix) :]
+    if delta_suffix:
+        stem = name[:-4] if name.endswith(".png") else name
+        if stem.endswith(delta_suffix):
+            stem = stem[: -len(delta_suffix)]
+            name = stem + ".png"
+    return name
 
 
 def scan_project_incremental(project_path, cancel_event=None, profiles=None):
@@ -261,8 +284,26 @@ def _discover_paparazzi_modules(root, profiles=None):
             depth = len(parts) - idx
             if depth == 1:
                 dirnames[:] = [
-                    d for d in dirnames if d in ("paparazzi", "test-results")
+                    d for d in dirnames if d in ("paparazzi", "test-results", "outputs")
                 ]
+            elif depth == 2 and parts[-1] == "outputs":
+                # Inside build/outputs/ — only keep roborazzi
+                dirnames[:] = [d for d in dirnames if d == "roborazzi"]
+            elif depth == 3 and parts[-2:] == ["outputs", "roborazzi"]:
+                # Found a roborazzi module
+                module_parts = parts[:idx]
+                if module_parts and module_parts != ["."]:
+                    module_name = ":" + ":".join(module_parts)
+                    module_path = root / Path(*module_parts)
+                else:
+                    module_name = ":root"
+                    module_path = root
+                yield (
+                    Path(dirpath) if Path(dirpath).is_dir() else None,
+                    module_name,
+                    module_path,
+                )
+                dirnames.clear()
             elif depth == 2 and parts[-1] == "paparazzi":
                 # Found a paparazzi module
                 module_parts = parts[:idx]
@@ -285,11 +326,20 @@ def _discover_paparazzi_modules(root, profiles=None):
                 dirnames.clear()
 
 
-def _detect_current_failures(failures_dir):
-    """Return only delta files from the most recent verifyPaparazzi run."""
+def _detect_current_failures(failures_dir, delta_prefix="delta-", delta_suffix=""):
+    """Return only delta/compare files from the most recent test run."""
     delta_files = []
     for f in failures_dir.iterdir():
-        if f.name.startswith("delta-") and f.name.endswith(".png") and f.is_file():
+        if not f.is_file() or not f.name.endswith(".png"):
+            continue
+        is_delta = False
+        if delta_prefix and f.name.startswith(delta_prefix):
+            is_delta = True
+        if delta_suffix:
+            stem = f.name[:-4]
+            if stem.endswith(delta_suffix):
+                is_delta = True
+        if is_delta:
             delta_files.append((f, f.stat().st_mtime))
 
     if not delta_files:

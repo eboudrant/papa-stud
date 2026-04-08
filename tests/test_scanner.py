@@ -112,22 +112,21 @@ class TestScanProject(unittest.TestCase):
             self.assertEqual(len(result["failures"]), 1)
             self.assertFalse(result["failures"][0]["has_golden"])
 
-    def test_stale_delta_filtered_when_golden_newer(self):
+    def test_stale_delta_filtered_when_xml_newer_and_passing(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             failures = root / "app" / "build" / "paparazzi" / "failures"
-            golden = root / "app" / "src" / "test" / "snapshots" / "images"
+            xml_dir = root / "app" / "build" / "test-results" / "testDebugUnitTest"
             failures.mkdir(parents=True)
-            golden.mkdir(parents=True)
+            xml_dir.mkdir(parents=True)
 
             # Delta created first (old)
             _make_png(failures / "delta-com.example_Test_method.png")
-            _make_png(failures / "com.example_Test_method.png")
             os.utime(failures / "delta-com.example_Test_method.png", (1000000, 1000000))
-            os.utime(failures / "com.example_Test_method.png", (1000000, 1000000))
 
-            # Golden created after (newer = recordPaparazzi ran)
-            _make_png(golden / "com.example_Test_method.png")
+            # JUnit XML created after with 0 failures (recordPaparazzi ran)
+            xml_content = '<?xml version="1.0"?><testsuite tests="1" failures="0" errors="0" skipped="0" time="1.0"><testcase name="test" classname="Test" time="1.0"/></testsuite>'
+            (xml_dir / "TEST-Test.xml").write_text(xml_content)
 
             result = scan_project(str(root))
             self.assertEqual(len(result["failures"]), 0)
@@ -272,6 +271,101 @@ class TestProfiles(unittest.TestCase):
             _, failures = process_single_module(fail_dir, ":root", root, profiles)
             self.assertEqual(len(failures), 1)
             self.assertEqual(failures[0]["profile"], "custom")
+
+
+class TestRoborazziNaming(unittest.TestCase):
+    def test_roborazzi_compare_suffix(self):
+        """Roborazzi uses _compare suffix for deltas, _actual for actuals."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            fail_dir = root / "mod" / "build" / "outputs" / "roborazzi"
+            golden_dir = root / "mod" / "src" / "test" / "goldens" / "roborazzi" / "pkg"
+            fail_dir.mkdir(parents=True)
+            golden_dir.mkdir(parents=True)
+
+            # Roborazzi naming: compare, actual, golden
+            _make_png(fail_dir / "testFoo.1_bar_compare.png")
+            _make_png(fail_dir / "testFoo.1_bar_actual.png")
+            _make_png(golden_dir / "testFoo.1_bar.png")
+            os.utime(golden_dir / "testFoo.1_bar.png", (1000000, 1000000))
+
+            profiles = [
+                {
+                    "name": "Roborazzi",
+                    "failures_dir": "build/outputs/roborazzi",
+                    "golden_dir": "src/test/goldens/roborazzi",
+                    "golden_patterns": ["src/test/goldens/roborazzi/**/{name}.png"],
+                    "delta_prefix": "",
+                    "delta_suffix": "_compare",
+                    "actual_suffix": "_actual",
+                }
+            ]
+
+            from server.scanner import process_single_module
+
+            _, failures = process_single_module(
+                fail_dir, ":mod", root / "mod", profiles
+            )
+
+            self.assertEqual(len(failures), 1)
+            f = failures[0]
+            self.assertEqual(f["filename"], "testFoo.1_bar.png")
+            self.assertIn("_compare", f["delta_path"])
+            self.assertIn("_actual", f["actual_path"])
+            self.assertIn("goldens", f["golden_path"])
+
+    def test_delta_to_base_with_suffix(self):
+        from server.scanner import _delta_to_base
+
+        # Roborazzi style
+        self.assertEqual(
+            _delta_to_base("testFoo_compare.png", "", "_compare"), "testFoo.png"
+        )
+        # Paparazzi style
+        self.assertEqual(
+            _delta_to_base("delta-testFoo.png", "delta-", ""), "testFoo.png"
+        )
+        # Both prefix and suffix
+        self.assertEqual(
+            _delta_to_base("delta-testFoo_diff.png", "delta-", "_diff"),
+            "testFoo.png",
+        )
+
+    def test_glob_golden_pattern(self):
+        """Golden patterns with ** should resolve recursively."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            deep = root / "src" / "goldens" / "pkg" / "TestClass"
+            deep.mkdir(parents=True)
+            _make_png(deep / "testMethod.png")
+
+            from server.scanner import _resolve_golden
+
+            result = _resolve_golden(
+                root, ["src/goldens/**/{name}.png"], "testMethod.png"
+            )
+            self.assertIsNotNone(result)
+            self.assertIn("TestClass", str(result))
+
+
+class TestTemplates(unittest.TestCase):
+    def test_builtin_templates_exist(self):
+        from server.templates import list_templates
+
+        tmps = list_templates()
+        ids = [t["id"] for t in tmps]
+        self.assertIn("paparazzi", ids)
+        self.assertIn("roborazzi", ids)
+
+    def test_template_to_profile(self):
+        from server.templates import get_template, template_to_profile
+
+        t = get_template("roborazzi")
+        p = template_to_profile(t)
+        self.assertEqual(p["name"], "Roborazzi")
+        self.assertEqual(p["delta_suffix"], "_compare")
+        self.assertEqual(p["actual_suffix"], "_actual")
+        self.assertEqual(p["template_id"], "roborazzi")
 
 
 if __name__ == "__main__":
