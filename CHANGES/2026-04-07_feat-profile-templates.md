@@ -1,11 +1,11 @@
-# feat: profile templates, Roborazzi support, dark mode
+# feat: profile templates, Roborazzi support, dark mode, UX improvements
 
-**Date:** 2026-04-07
+**Date:** 2026-04-08
 **Type:** Feature
 
 ## Intent
 
-Add reusable profile templates for common screenshot testing tools (Paparazzi, Roborazzi). Support Roborazzi's naming conventions (_compare/_actual suffixes). Add dark/light theme toggle. Rename to "Papa Stud.io".
+Add reusable profile templates for common screenshot testing tools (Paparazzi, Roborazzi). Support Roborazzi's naming conventions (_compare/_actual suffixes). Add dark/light theme toggle. Rename to "Papa Stud.io". Profile editor with reset-to-defaults. One scan per project. Video progress bar at bottom.
 
 ### Prompts summary
 
@@ -17,6 +17,10 @@ Add reusable profile templates for common screenshot testing tools (Paparazzi, R
 6. Remove golden stale check (wrong for Roborazzi where goldens are updated in same run)
 7. Dark/light theme toggle with Cmd+Shift+L shortcut
 8. Rename header to "Papa Stud.io"
+9. Profile editor: override paths with per-field and "Reset to Defaults" buttons (real-time as you type)
+10. One scan per project: new scan atomically replaces old one
+11. Scans section moved to top of home page
+12. Video: stick figure behind feature flag (default off), progress bar moved to bottom
 
 ## Changes
 
@@ -64,10 +68,12 @@ Add reusable profile templates for common screenshot testing tools (Paparazzi, R
 |------|--------|
 | `server/templates.py` | Profile template system |
 | `server/scanner.py` | Roborazzi support, configurable naming, golden cache |
-| `server/projects.py` | Template-based project creation |
+| `server/projects.py` | Template-based project creation, one scan per project |
 | `server/handler.py` | Template API endpoints |
+| `server/video.py` | Stick figure feature flag, progress bar at bottom |
 | `static/index.html` | Rebranding, theme toggle |
-| `static/css/app.css` | Dark mode, template/profile styles |
-| `static/js/home.js` | Template UI, profile management |
+| `static/css/app.css` | Dark mode, template/profile styles, reset button styles |
+| `static/js/home.js` | Template UI, profile management, reset-to-defaults, scans at top |
 | `static/js/review.js` | Profile pills show all configured profiles |
 | `tests/test_scanner.py` | Roborazzi, template, glob tests |
+| `tests/test_projects.py` | One scan per project tests |

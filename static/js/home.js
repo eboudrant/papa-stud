@@ -5,6 +5,10 @@ async function showHome() {
   content.innerHTML = `
     <div class="home">
       <section class="section">
+        <h2>Scans</h2>
+        <div id="scans-list" class="card-list"></div>
+      </section>
+      <section class="section">
         <div class="section-header">
           <h2>Projects</h2>
           <button class="btn" onclick="_showAddProject()">Add Project</button>
@@ -29,10 +33,6 @@ async function showHome() {
         </div>
         <div id="create-template-form" style="display:none"></div>
         <div id="templates-list" class="template-list"></div>
-      </section>
-      <section class="section">
-        <h2>Recent Scans</h2>
-        <div id="scans-list" class="card-list"></div>
       </section>
     </div>
   `;
@@ -93,7 +93,7 @@ function _renderProjects(projectsList) {
 function _renderScans(scansList) {
   const el = document.getElementById('scans-list');
   if (!scansList.length) {
-    el.innerHTML = '<div class="empty-state">No scans yet. Scan a project to find failures.</div>';
+    el.innerHTML = '<div class="empty-state">No scans yet. Add a project and scan it to find failures.</div>';
     return;
   }
   el.innerHTML = scansList.map(s => {
@@ -255,12 +255,17 @@ async function _deleteTemplate(id) {
 // --- Profile management ---
 
 let _editingProfiles = {}; // projectId -> profiles array being edited
+let _templateCache = null; // cached templates for profile editor
 
 async function _showProfiles(projectId) {
   const el = document.getElementById(`profiles-${projectId}`);
   if (!el) return;
   el.style.display = 'block';
-  const projects = await apiGet('/api/projects');
+  const [projects, templates] = await Promise.all([
+    apiGet('/api/projects'),
+    apiGet('/api/templates'),
+  ]);
+  _templateCache = templates;
   const p = projects.find(x => x.id === projectId);
   _editingProfiles[projectId] = JSON.parse(JSON.stringify(p?.profiles || []));
   _renderProfilesList(projectId);
@@ -275,49 +280,188 @@ function _hideProfiles(projectId) {
 function _renderProfilesList(projectId) {
   const el = document.getElementById(`profiles-list-${projectId}`);
   const profiles = _editingProfiles[projectId] || [];
-  el.innerHTML = profiles.map((pr, i) => `
+  el.innerHTML = profiles.map((pr, i) => {
+    const tmpl = _getTemplateForProfile(pr);
+    const hasOverride = tmpl && _profileEditing === i && ['failures_dir', 'delta_prefix', 'delta_suffix', 'actual_suffix', 'golden_patterns']
+      .some(f => _isFieldModified(pr, tmpl, f, f === 'delta_prefix' ? 'delta-' : ''));
+    return `
     <div class="profile-card ${_profileEditing === i ? 'profile-editing' : ''}">
       <div class="profile-card-header">
         <span class="profile-card-name">${escHtml(pr.name)}</span>
         <span class="profile-card-dir">${escHtml(pr.failures_dir)}</span>
         <div class="profile-card-actions">
+          ${hasOverride ? `<button class="btn btn-sm btn-reset-all" onclick="_resetProfileToDefaults('${projectId}', ${i})">Reset to Defaults</button>` : ''}
           <button class="btn btn-sm" onclick="_editProfile('${projectId}', ${i})">${_profileEditing === i ? 'Close' : 'Edit'}</button>
           <button class="btn btn-sm btn-danger-text" onclick="_removeProfile('${projectId}', ${i})">Remove</button>
         </div>
       </div>
       ${_profileEditing === i ? _renderProfileEditor(projectId, i, pr) : ''}
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 let _profileEditing = -1;
 
+function _getTemplateForProfile(pr) {
+  if (!pr.template_id || !_templateCache) return null;
+  return _templateCache.find(t => t.id === pr.template_id) || null;
+}
+
+function _isFieldModified(pr, tmpl, field, defaultVal) {
+  if (!tmpl) return false;
+  const current = field === 'golden_patterns'
+    ? (pr.golden_patterns || []).join('\n')
+    : (pr[field] ?? defaultVal);
+  const original = field === 'golden_patterns'
+    ? (tmpl.golden_patterns || []).join('\n')
+    : (tmpl[field] ?? defaultVal);
+  return current !== original;
+}
+
+function _resetProfileField(projectId, index, field) {
+  const pr = _editingProfiles[projectId][index];
+  const tmpl = _getTemplateForProfile(pr);
+  if (!tmpl) return;
+  if (field === 'golden_patterns') {
+    pr.golden_patterns = [...(tmpl.golden_patterns || [])];
+  } else {
+    pr[field] = tmpl[field];
+  }
+  _renderProfilesList(projectId);
+}
+
+function _resetProfileToDefaults(projectId, index) {
+  const pr = _editingProfiles[projectId][index];
+  const tmpl = _getTemplateForProfile(pr);
+  if (!tmpl) return;
+  pr.failures_dir = tmpl.failures_dir;
+  pr.golden_patterns = [...(tmpl.golden_patterns || [])];
+  pr.delta_prefix = tmpl.delta_prefix;
+  pr.delta_suffix = tmpl.delta_suffix;
+  pr.actual_suffix = tmpl.actual_suffix;
+  _renderProfilesList(projectId);
+}
+
 function _renderProfileEditor(projectId, index, pr) {
   const gp = pr.golden_patterns || [];
+  const tmpl = _getTemplateForProfile(pr);
+
+  function fieldRow(label, field, value, defaultVal, attrs) {
+    const modified = _isFieldModified(pr, tmpl, field, defaultVal);
+    const resetBtn = modified
+      ? `<button class="btn-reset" onclick="_resetProfileField('${projectId}', ${index}, '${field}')" title="Reset to template default">&circlearrowleft;</button>`
+      : '';
+    const fid = `pf-${projectId}-${index}-${field}`;
+    return `
+      <div class="profile-editor-row ${modified ? 'profile-field-modified' : ''}" id="${fid}-row">
+        <label>${label}</label>
+        <span class="input-reset-wrap" id="${fid}-wrap">
+          <input class="input input-sm ${modified ? 'input-has-reset' : ''}" value="${escAttr(value)}" ${attrs || ''} oninput="_onProfileInput('${projectId}', ${index}, '${field}', this.value, '${escAttr(defaultVal)}')">
+          ${resetBtn}
+        </span>
+      </div>`;
+  }
+
+  const gpModified = _isFieldModified(pr, tmpl, 'golden_patterns', '');
+  const gpResetBtn = gpModified
+    ? `<button class="btn-reset" onclick="_resetProfileField('${projectId}', ${index}, 'golden_patterns')" title="Reset to template default">&circlearrowleft;</button>`
+    : '';
+  const gpFid = `pf-${projectId}-${index}-golden_patterns`;
+
   return `
     <div class="profile-editor">
       <div class="profile-editor-row">
         <label>Name</label>
-        <input class="input input-sm" value="${escAttr(pr.name)}" onchange="_editingProfiles['${projectId}'][${index}].name=this.value">
+        <input class="input input-sm" value="${escAttr(pr.name)}" oninput="_editingProfiles['${projectId}'][${index}].name=this.value">
       </div>
+      ${fieldRow('Failures dir', 'failures_dir', pr.failures_dir, '')}
       <div class="profile-editor-row">
-        <label>Failures dir</label>
-        <input class="input input-sm" value="${escAttr(pr.failures_dir)}" onchange="_editingProfiles['${projectId}'][${index}].failures_dir=this.value">
+        ${_inlineField(projectId, index, pr, tmpl, 'Delta prefix', 'delta_prefix', pr.delta_prefix || 'delta-', 'delta-', 'style="width:100px"')}
+        ${_inlineField(projectId, index, pr, tmpl, 'Delta suffix', 'delta_suffix', pr.delta_suffix || '', '', 'style="width:100px"')}
+        ${_inlineField(projectId, index, pr, tmpl, 'Actual suffix', 'actual_suffix', pr.actual_suffix || '', '', 'style="width:100px"')}
       </div>
-      <div class="profile-editor-row">
-        <label>Delta prefix</label>
-        <input class="input input-sm" value="${escAttr(pr.delta_prefix || 'delta-')}" style="width:100px" onchange="_editingProfiles['${projectId}'][${index}].delta_prefix=this.value">
-        <label>Delta suffix</label>
-        <input class="input input-sm" value="${escAttr(pr.delta_suffix || '')}" style="width:100px" onchange="_editingProfiles['${projectId}'][${index}].delta_suffix=this.value">
-        <label>Actual suffix</label>
-        <input class="input input-sm" value="${escAttr(pr.actual_suffix || '')}" style="width:100px" onchange="_editingProfiles['${projectId}'][${index}].actual_suffix=this.value">
-      </div>
-      <div class="profile-editor-row">
+      <div class="profile-editor-row ${gpModified ? 'profile-field-modified' : ''}" id="${gpFid}-row">
         <label>Golden patterns (one per line, use {name})</label>
-        <textarea class="input input-sm" rows="${Math.max(2, gp.length)}" onchange="_editingProfiles['${projectId}'][${index}].golden_patterns=this.value.split('\\n').filter(Boolean)">${escHtml(gp.join('\n'))}</textarea>
+        <span class="input-reset-wrap" id="${gpFid}-wrap">
+          <textarea class="input input-sm ${gpModified ? 'input-has-reset' : ''}" rows="${Math.max(2, gp.length)}" oninput="_onProfileInput('${projectId}', ${index}, 'golden_patterns', this.value, '')">${escHtml(gp.join('\n'))}</textarea>
+          ${gpResetBtn}
+        </span>
       </div>
     </div>
   `;
+}
+
+function _inlineField(projectId, index, pr, tmpl, label, field, value, defaultVal, attrs) {
+  const modified = _isFieldModified(pr, tmpl, field, defaultVal);
+  const resetBtn = modified
+    ? `<button class="btn-reset" onclick="_resetProfileField('${projectId}', ${index}, '${field}')" title="Reset to template default">&circlearrowleft;</button>`
+    : '';
+  const fid = `pf-${projectId}-${index}-${field}`;
+  return `
+    <label>${label}</label>
+    <span class="input-reset-wrap input-reset-wrap-inline" id="${fid}-wrap">
+      <input class="input input-sm ${modified ? 'input-has-reset' : ''}" value="${escAttr(value)}" ${attrs || ''} oninput="_onProfileInput('${projectId}', ${index}, '${field}', this.value, '${escAttr(defaultVal)}')">
+      ${resetBtn}
+    </span>`;
+}
+
+function _onProfileInput(projectId, index, field, value, defaultVal) {
+  const pr = _editingProfiles[projectId][index];
+  if (field === 'golden_patterns') {
+    pr.golden_patterns = value.split('\n').filter(Boolean);
+  } else {
+    pr[field] = value;
+  }
+  // Update reset button visibility without re-rendering (preserves focus)
+  const tmpl = _getTemplateForProfile(pr);
+  const modified = _isFieldModified(pr, tmpl, field, defaultVal);
+  const fid = `pf-${projectId}-${index}-${field}`;
+  const wrap = document.getElementById(`${fid}-wrap`);
+  const row = document.getElementById(`${fid}-row`);
+  if (!wrap) return;
+  const input = wrap.querySelector('input, textarea');
+  const existing = wrap.querySelector('.btn-reset');
+  if (modified && !existing) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-reset';
+    btn.title = 'Reset to template default';
+    btn.innerHTML = '&circlearrowleft;';
+    btn.onclick = () => _resetProfileField(projectId, index, field);
+    wrap.appendChild(btn);
+    if (input) input.classList.add('input-has-reset');
+    if (row) row.classList.add('profile-field-modified');
+  } else if (!modified && existing) {
+    existing.remove();
+    if (input) input.classList.remove('input-has-reset');
+    if (row) row.classList.remove('profile-field-modified');
+  }
+  // Update "Reset to Defaults" button in header
+  _updateResetAllButton(projectId, index);
+}
+
+function _updateResetAllButton(projectId, index) {
+  const pr = _editingProfiles[projectId][index];
+  const tmpl = _getTemplateForProfile(pr);
+  const hasOverride = tmpl && ['failures_dir', 'delta_prefix', 'delta_suffix', 'actual_suffix', 'golden_patterns']
+    .some(f => _isFieldModified(pr, tmpl, f, f === 'delta_prefix' ? 'delta-' : ''));
+  const actions = document.querySelector(`#profiles-list-${projectId} .profile-editing .profile-card-actions`);
+  if (!actions) return;
+  const existing = actions.querySelector('.btn-reset-all');
+  if (hasOverride && !existing) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-reset-all';
+    btn.textContent = 'Reset to Defaults';
+    btn.onclick = () => _resetProfileToDefaults(projectId, index);
+    actions.insertBefore(btn, actions.firstChild);
+  } else if (!hasOverride && existing) {
+    existing.remove();
+  }
+  // Update header subtitle
+  const header = actions.closest('.profile-card-header');
+  if (header) {
+    const dir = header.querySelector('.profile-card-dir');
+    if (dir) dir.textContent = pr.failures_dir;
+  }
 }
 
 function _editProfile(projectId, index) {

@@ -191,6 +191,15 @@ select.input { appearance: auto; }
 .profile-editor-row label { font-size: 11px; font-weight: 600; color: var(--text-dim); white-space: nowrap; }
 .profile-editor-row .input-sm { flex: 1; min-width: 120px; }
 .profile-editor-row textarea { width: 100%; min-height: 40px; font-family: monospace; font-size: 12px; }
+.profile-field-modified { border-left: 2px solid var(--accent); padding-left: 6px; }
+.input-reset-wrap { position: relative; display: flex; flex: 1; min-width: 120px; }
+.input-reset-wrap-inline { min-width: auto; }
+.input-reset-wrap .input-sm { flex: 1; width: 100%; }
+.input-has-reset { padding-right: 28px !important; }
+.btn-reset { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 14px; padding: 0; line-height: 1; opacity: 0.5; transition: opacity 0.15s; z-index: 1; }
+.btn-reset:hover { opacity: 1; color: var(--accent); }
+.btn-reset-all { font-size: 11px; color: var(--text-dim); border-color: var(--border); }
+.btn-reset-all:hover { color: var(--accent, #3b82f6); border-color: var(--accent, #3b82f6); }
 .profiles-actions { display: flex; gap: 6px; margin-top: 12px; }
 .filter-pills { display: flex; gap: 4px; }
 

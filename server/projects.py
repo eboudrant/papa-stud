@@ -207,7 +207,11 @@ def create_scan(project_id):
 
 
 def create_scan_from_results(project_id, project_name, project_path, modules, failures):
-    """Create and persist a scan from pre-computed results. Called by scan_jobs."""
+    """Create and persist a scan from pre-computed results. Called by scan_jobs.
+
+    Enforces one scan per project: deletes any existing scans for this project
+    before creating the new one (atomically under the lock).
+    """
     scan_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
     scan = {
         "id": scan_id,
@@ -221,8 +225,18 @@ def create_scan_from_results(project_id, project_name, project_path, modules, fa
     }
 
     with _lock:
+        # One scan per project: remove old scans atomically
+        index = _read_index()
+        old_ids = [s["id"] for s in index if s["projectId"] == project_id]
+        for old_id in old_ids:
+            p = _scan_path(old_id)
+            if p.is_file():
+                p.unlink()
+        index = [s for s in index if s["id"] not in set(old_ids)]
+
         _write_json(_scan_path(scan_id), scan)
-        _update_index(_scan_summary(scan))
+        index.insert(0, _scan_summary(scan))
+        _write_json(_index_path(), index)
 
     return scan
 
