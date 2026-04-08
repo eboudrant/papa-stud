@@ -1,12 +1,25 @@
 {
-  "name": "papa-stud",
+  "name": "papastud",
+  "version": "1.0.0",
+  "description": "Screenshot failure reviewer for Android testing tools",
   "private": true,
+  "main": "src/server.js",
   "scripts": {
+    "start": "node src/server.js",
+    "electron": "electron electron/main.js",
+    "test": "node --test tests/node/*.test.js",
     "test:screenshots": "docker run --rm -e CI=true papastud-test npx playwright test",
     "test:screenshots:update": "docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots",
     "test:screenshots:build": "docker build -f Dockerfile.test -t papastud-test ."
   },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "express": "^4.21.0",
+    "fast-glob": "^3.3.0",
+    "fast-xml-parser": "^4.5.0"
+  },
   "devDependencies": {
-    "@playwright/test": "1.59.1"
+    "@playwright/test": "1.59.1",
+    "electron": "^33.4.11"
   }
 }

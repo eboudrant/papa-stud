@@ -1,3 +1,0 @@
-# Optional: install watchdog for instant file change notifications
-# Without it, Papa Stud falls back to polling (2s interval)
-watchdog>=4.0
