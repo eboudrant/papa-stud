@@ -37,6 +37,19 @@ const BUILTIN_TEMPLATES = [
     delta_suffix: '_compare',
     actual_suffix: '_actual',
   },
+  {
+    id: 'compose-screenshot',
+    name: 'Compose Screenshot',
+    tool: 'compose',
+    builtin: true,
+    description: 'Google',
+    failures_dir: 'build/outputs/screenshotTest-results/preview/debug/rendered',
+    golden_dir: 'src/screenshotTestDebug/reference',
+    golden_patterns: ['src/screenshotTestDebug/reference/**/{name}.png'],
+    delta_prefix: '',
+    delta_suffix: '',
+    actual_suffix: '',
+  },
 ];
 
 function customPath() {
@@ -98,7 +111,7 @@ function deleteTemplate(templateId) {
 }
 
 function templateToProfile(template) {
-  return {
+  const profile = {
     name: template.name || '',
     failures_dir: template.failures_dir || '',
     golden_dir: template.golden_dir || '',
@@ -108,6 +121,7 @@ function templateToProfile(template) {
     actual_suffix: template.actual_suffix || '',
     template_id: template.id || '',
   };
+  return profile;
 }
 
 module.exports = {

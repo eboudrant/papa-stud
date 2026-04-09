@@ -75,8 +75,8 @@ function showDetail(scanId, filename) {
       case 'ArrowRight': _detailNext(scanId); break;
       case 'ArrowLeft': _detailPrev(scanId); break;
       case 'Escape': navigate(`/scans/${scanId}`); break;
-      case '1': _setViewMode('delta', scanId); break;
-      case '2': _setViewMode('toggle', scanId); break;
+      case '1': _setViewMode(_detailFailure?.delta_path ? 'delta' : 'toggle', scanId); break;
+      case '2': _setViewMode(_detailFailure?.delta_path ? 'toggle' : 'slider', scanId); break;
       case '3': _setViewMode('slider', scanId); break;
       case 'e': case 'E': _cycleViewMode(scanId); break;
       case '0': case 'r': case 'R': _zoomReset(); break;
@@ -144,6 +144,10 @@ function _renderDetail(scanId) {
   const actualSrc = f.actual_path ? `/api/images?path=${encodeURIComponent(f.actual_path)}` : '';
   // When actual is missing (e.g., figma handler only writes delta), use delta as fallback
   const effectiveActual = actualSrc || deltaSrc;
+  const hasDelta = !!deltaSrc;
+
+  // Auto-switch to toggle if no delta available
+  if (!hasDelta && _viewMode === 'delta') _viewMode = 'toggle';
 
   let viewContent = '';
 
@@ -226,9 +230,9 @@ function _renderDetail(scanId) {
           <span class="detail-subtitle">${escHtml(f.package)}${f.method ? '.' + escHtml(f.method) : ''}${f.snapshot_name ? ' / ' + escHtml(f.snapshot_name) : ''}</span>
         </div>
         <div class="detail-mode-tabs">
-          <button class="pill ${_viewMode === 'delta' ? 'active' : ''}" onclick="_setViewMode('delta', '${scanId}')">Delta (1)</button>
-          <button class="pill ${_viewMode === 'toggle' ? 'active' : ''}" onclick="_setViewMode('toggle', '${scanId}')">Toggle (2)</button>
-          <button class="pill ${_viewMode === 'slider' ? 'active' : ''}" onclick="_setViewMode('slider', '${scanId}')">Slider (3)</button>
+          ${hasDelta ? `<button class="pill ${_viewMode === 'delta' ? 'active' : ''}" onclick="_setViewMode('delta', '${scanId}')">Delta (1)</button>` : ''}
+          <button class="pill ${_viewMode === 'toggle' ? 'active' : ''}" onclick="_setViewMode('toggle', '${scanId}')">Toggle (${hasDelta ? '2' : '1'})</button>
+          <button class="pill ${_viewMode === 'slider' ? 'active' : ''}" onclick="_setViewMode('slider', '${scanId}')">Slider (${hasDelta ? '3' : '2'})</button>
         </div>
         ${f.diff_pct != null ? `<span class="detail-diff-pct" style="color:${_diffColor(f.diff_pct)}">${f.diff_pct.toFixed(3)}%</span>` : ''}
         <div class="detail-nav">
@@ -263,7 +267,8 @@ function _copyPath(path, btn) {
 }
 
 function _cycleViewMode(scanId) {
-  const modes = ['delta', 'toggle', 'slider'];
+  const hasDelta = !!_detailFailure?.delta_path;
+  const modes = hasDelta ? ['delta', 'toggle', 'slider'] : ['toggle', 'slider'];
   const next = modes[(modes.indexOf(_viewMode) + 1) % modes.length];
   _setViewMode(next, scanId);
 }

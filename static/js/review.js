@@ -187,10 +187,11 @@ function _appendGrid(failures) {
     card.className = 'thumb-card';
     card.href = `#/scans/${scanId}/review/${encodeURIComponent(f.filename)}`;
 
-    const imgSrc = f.delta_path ? `/api/images?path=${encodeURIComponent(f.delta_path)}` : '';
+    const thumbPath = f.delta_path || f.actual_path;
+    const imgSrc = thumbPath ? `/api/images?path=${encodeURIComponent(thumbPath)}` : '';
     card.innerHTML = `
       <div class="thumb-img-wrap">
-        ${imgSrc ? `<img loading="lazy" src="${imgSrc}" alt="${escAttr(f.filename)}" width="280" height="180">` : '<div class="thumb-placeholder">No delta</div>'}
+        ${imgSrc ? `<img loading="lazy" src="${imgSrc}" alt="${escAttr(f.filename)}" width="280" height="180">` : '<div class="thumb-placeholder">No image</div>'}
       </div>
       <div class="thumb-info">
         <span class="thumb-name" title="${escAttr(f.filename)}">${escHtml(f.class_name || f.filename)}</span>
