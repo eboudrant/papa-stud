@@ -46,6 +46,7 @@ function _onHashChange() {
 }
 
 const _isElectron = new URLSearchParams(window.location.search).has('electron');
+if (_isElectron) document.body.classList.add('electron');
 
 /** Update nav breadcrumbs. Call setNavContext() from pages to add scan/project info. */
 let _navContext = {};

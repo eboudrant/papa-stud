@@ -56,6 +56,8 @@ function createWindow() {
     width: 1400,
     height: 900,
     title: 'Papa Stud.io',
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 12, y: 6 },
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -163,7 +165,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  app.quit();
 });
 
 app.on('before-quit', () => {
