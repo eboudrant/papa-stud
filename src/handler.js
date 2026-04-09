@@ -129,19 +129,25 @@ function createRouter() {
     }
   });
 
-  router.post('/api/scans/:id/video', (req, res) => {
+  router.post('/api/scans/:id/video', async (req, res) => {
     const scanId = req.params.id.replace(/[^a-zA-Z0-9._-]/g, '');
-    const scan = projects.getScan(scanId, { page: 0, size: 10000 });
+    const { module: mod, profile, q } = req.query;
+    const scan = projects.getScan(scanId, {
+      page: 0, size: 10000,
+      module: mod || undefined,
+      profile: profile || undefined,
+      query: q || undefined,
+    });
     if (!scan) return res.status(404).json({ error: 'scan not found' });
     const failures = (scan.failures || []).filter(f => f.delta_path);
     if (!failures.length) return res.status(400).json({ error: 'no failures to export' });
 
-    // Temp path derived entirely from mkdtempSync — no user input in path
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-vid-'));
     const tmpFile = path.join(tmpDir, 'output.mp4');
     try {
-      video.generateVideo(failures, tmpFile);
-      res.set('Content-Disposition', `attachment; filename="papa-stud-${scanId}.mp4"`);
+      await video.generateVideo(failures, tmpFile);
+      const filterTag = [mod, profile, q].filter(Boolean).join('-').replace(/[^a-zA-Z0-9._-]/g, '') || 'all';
+      res.set('Content-Disposition', `attachment; filename="papa-stud-${scanId}-${filterTag}.mp4"`);
       res.set('Content-Type', 'video/mp4');
       const stat = fs.statSync(tmpFile);
       res.set('Content-Length', String(stat.size));
@@ -149,8 +155,9 @@ function createRouter() {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       });
     } catch (e) {
+      console.error('Video generation failed:', e.message);
       fs.rmSync(tmpDir, { recursive: true, force: true });
-      res.status(500).json({ error: e.message });
+      if (!res.headersSent) res.status(500).json({ error: e.message });
     }
   });
 
