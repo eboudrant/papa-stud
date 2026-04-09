@@ -16,6 +16,16 @@ const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: 
 
 const MTIME_CLUSTER_TOLERANCE = 60.0;
 
+const BUILD_ALLOWED = new Set(['paparazzi', 'test-results', 'outputs']);
+const OUTPUT_ALLOWED = new Set(['roborazzi', 'screenshotTest-results']);
+
+function deriveModule(relParts, buildIdx, root) {
+  const moduleParts = relParts.slice(0, buildIdx);
+  const moduleName = moduleParts.length ? ':' + moduleParts.join(':') : ':root';
+  const modulePath = moduleParts.length ? path.join(root, ...moduleParts) : root;
+  return [moduleName, modulePath];
+}
+
 const PRUNE_DIRS = new Set([
   '.git', '.gradle', '.idea', 'node_modules', '.cxx', '.transforms', 'src', '.kotlin',
 ]);
@@ -85,9 +95,7 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles) {
       const gDirStr = profile.golden_dir || '';
       if (gDirStr) {
         const gDir = path.join(modulePath, gDirStr);
-        if (fs.existsSync(gDir) && fs.statSync(gDir).isDirectory()) {
-          totalSnapshots += fs.readdirSync(gDir).filter(f => f.endsWith('.png')).length;
-        }
+        totalSnapshots += countPngsRecursive(gDir);
       }
     }
   } else {
@@ -99,9 +107,7 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles) {
     moduleFailures.push(...pf);
     profileCounts.baseline = pf.length;
     const goldenDir = path.join(modulePath, 'src', 'test', 'snapshots', 'images');
-    if (fs.existsSync(goldenDir) && fs.statSync(goldenDir).isDirectory()) {
-      totalSnapshots = fs.readdirSync(goldenDir).filter(f => f.endsWith('.png')).length;
-    }
+    totalSnapshots = countPngsRecursive(goldenDir);
   }
 
   const moduleData = {
@@ -162,27 +168,52 @@ function processProfile(
     goldenCache[path.basename(f)] = resolveGolden(modulePath, goldenPatterns, base);
   }
 
-  for (const deltaPath of current) {
-    const base = deltaToBase(path.basename(deltaPath), deltaPrefix, deltaSuffix);
-    const parsed = parseFilename(base);
-    let actualName;
-    if (actualSuffix) {
-      const stem = base.endsWith('.png') ? base.slice(0, -4) : base;
-      actualName = `${stem}${actualSuffix}.png`;
-    } else {
-      actualName = base;
-    }
-    const actualPath = path.join(failuresDir, actualName);
-    const goldenPath = goldenCache[path.basename(deltaPath)];
-    const actualExists = fs.existsSync(actualPath) && fs.statSync(actualPath).isFile();
-    const stat = fs.statSync(deltaPath);
+  const noDeltaConvention = !deltaPrefix && !deltaSuffix;
 
+  for (const candidatePath of current) {
+    const base = deltaToBase(path.basename(candidatePath), deltaPrefix, deltaSuffix);
+    const parsed = parseFilename(base);
+    const goldenPath = goldenCache[path.basename(candidatePath)];
+
+    let actualPath, deltaFilePath;
+    if (noDeltaConvention) {
+      // Compare mode: the file IS the actual, there's no separate delta
+      actualPath = candidatePath;
+      deltaFilePath = null;
+      // Skip if golden exists and files are identical (not a failure)
+      if (goldenPath) {
+        try {
+          const aStat = fs.statSync(candidatePath);
+          const gStat = fs.statSync(goldenPath);
+          if (aStat.size === gStat.size) {
+            const actualBuf = fs.readFileSync(candidatePath);
+            const goldenBuf = fs.readFileSync(goldenPath);
+            if (actualBuf.equals(goldenBuf)) continue;
+          }
+        } catch {}
+      }
+    } else {
+      // Delta mode: separate delta file, actual may have a suffix
+      deltaFilePath = candidatePath;
+      let actualName;
+      if (actualSuffix) {
+        const stem = base.endsWith('.png') ? base.slice(0, -4) : base;
+        actualName = `${stem}${actualSuffix}.png`;
+      } else {
+        actualName = base;
+      }
+      actualPath = path.join(failuresDir, actualName);
+      try { if (!fs.statSync(actualPath).isFile()) actualPath = null; }
+      catch { actualPath = null; }
+    }
+
+    const stat = fs.statSync(candidatePath);
     results.push({
       module: moduleName,
       profile: profileName,
       filename: base,
-      delta_path: deltaPath,
-      actual_path: actualExists ? actualPath : null,
+      delta_path: deltaFilePath,
+      actual_path: actualPath,
       golden_path: goldenPath || null,
       package: parsed.package,
       class_name: parsed.class_name,
@@ -191,7 +222,7 @@ function processProfile(
       status: 'pending',
       diff_pct: (diffPcts || {})[base] || null,
       has_golden: goldenPath !== null,
-      has_actual: actualExists,
+      has_actual: actualPath !== null,
       mtime: stat.mtimeMs / 1000,
     });
   }
@@ -233,26 +264,28 @@ function* walkWithPruning(dir, root, relParts = []) {
     const depth = relParts.length - idx;
 
     if (depth === 1) {
-      const allowed = new Set(['paparazzi', 'test-results', 'outputs']);
-      for (const d of pruned.filter(d => allowed.has(d))) {
+      for (const d of pruned.filter(d => BUILD_ALLOWED.has(d))) {
         yield* walkWithPruning(path.join(dir, d), root, [...relParts, d]);
       }
     } else if (depth === 2 && relParts[relParts.length - 1] === 'outputs') {
-      for (const d of pruned.filter(d => d === 'roborazzi')) {
+      for (const d of pruned.filter(d => OUTPUT_ALLOWED.has(d))) {
         yield* walkWithPruning(path.join(dir, d), root, [...relParts, d]);
       }
-    } else if (depth === 3 && relParts.slice(-2).join('/') === 'outputs/roborazzi') {
-      const moduleParts = relParts.slice(0, idx);
-      const moduleName = moduleParts.length ? ':' + moduleParts.join(':') : ':root';
-      const modulePath = moduleParts.length ? path.join(root, ...moduleParts) : root;
+    } else if (depth === 3 && relParts[idx + 1] === 'outputs' && relParts[idx + 2] === 'screenshotTest-results') {
+      const [moduleName, modulePath] = deriveModule(relParts, idx, root);
+      yield [null, moduleName, modulePath];
+    } else if (depth === 3 && relParts[idx + 1] === 'outputs' && relParts[idx + 2] === 'roborazzi') {
+      const [moduleName, modulePath] = deriveModule(relParts, idx, root);
       yield [dir, moduleName, modulePath];
     } else if (depth === 2 && relParts[relParts.length - 1] === 'paparazzi') {
-      const moduleParts = relParts.slice(0, idx);
-      const moduleName = moduleParts.length ? ':' + moduleParts.join(':') : ':root';
-      const modulePath = moduleParts.length ? path.join(root, ...moduleParts) : root;
+      const [moduleName, modulePath] = deriveModule(relParts, idx, root);
       const failuresDir = path.join(dir, 'failures');
-      const fDirExists = fs.existsSync(failuresDir) && fs.statSync(failuresDir).isDirectory();
-      yield [fDirExists ? failuresDir : null, moduleName, modulePath];
+      try {
+        const fStat = fs.statSync(failuresDir);
+        yield [fStat.isDirectory() ? failuresDir : null, moduleName, modulePath];
+      } catch {
+        yield [null, moduleName, modulePath];
+      }
     } else if (depth === 2 && relParts[relParts.length - 1] === 'test-results') {
       // Allow traversal for JUnit XML discovery but don't yield modules
     } else {
@@ -268,27 +301,35 @@ function* walkWithPruning(dir, root, relParts = []) {
 
 function detectCurrentFailures(failuresDir, deltaPrefix = 'delta-', deltaSuffix = '') {
   const deltaFiles = [];
-  let entries;
-  try {
-    entries = fs.readdirSync(failuresDir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
+  const noDeltaConvention = !deltaPrefix && !deltaSuffix;
 
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.png')) continue;
-    let isDelta = false;
-    if (deltaPrefix && entry.name.startsWith(deltaPrefix)) isDelta = true;
-    if (deltaSuffix) {
-      const stem = entry.name.slice(0, -4);
-      if (stem.endsWith(deltaSuffix)) isDelta = true;
+  function scanDir(dir) {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
     }
-    if (isDelta) {
-      const fullPath = path.join(failuresDir, entry.name);
-      const mtime = fs.statSync(fullPath).mtimeMs / 1000;
-      deltaFiles.push([fullPath, mtime]);
+    for (const entry of entries) {
+      if (entry.isDirectory() && noDeltaConvention) {
+        scanDir(path.join(dir, entry.name)); // recurse for nested packages
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith('.png')) continue;
+      let isCandidate = noDeltaConvention;
+      if (deltaPrefix && entry.name.startsWith(deltaPrefix)) isCandidate = true;
+      if (deltaSuffix) {
+        const stem = entry.name.slice(0, -4);
+        if (stem.endsWith(deltaSuffix)) isCandidate = true;
+      }
+      if (isCandidate) {
+        const fullPath = path.join(dir, entry.name);
+        const mtime = fs.statSync(fullPath).mtimeMs / 1000;
+        deltaFiles.push([fullPath, mtime]);
+      }
     }
   }
+  scanDir(failuresDir);
 
   if (!deltaFiles.length) return [];
 
@@ -386,6 +427,22 @@ function parseSingleJunitXml(xmlPath) {
   } catch {
     return null;
   }
+}
+
+// --- Compare mode (Compose Screenshot Testing) ---
+
+function countPngsRecursive(dir) {
+  let count = 0;
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        count += countPngsRecursive(path.join(dir, entry.name));
+      } else if (entry.name.endsWith('.png')) {
+        count++;
+      }
+    }
+  } catch {}
+  return count;
 }
 
 module.exports = {

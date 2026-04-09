@@ -248,6 +248,7 @@ async function _updateTemplate(id) {
 }
 
 async function _deleteTemplate(id) {
+  if (!confirm('Delete this template?')) return;
   await apiDelete(`/api/templates/${id}`);
   await _loadHome();
 }
@@ -376,7 +377,7 @@ function _renderProfileEditor(projectId, index, pr) {
       </div>
       ${fieldRow('Failures dir', 'failures_dir', pr.failures_dir, '')}
       <div class="profile-editor-row">
-        ${_inlineField(projectId, index, pr, tmpl, 'Delta prefix', 'delta_prefix', pr.delta_prefix || 'delta-', 'delta-', 'style="width:100px"')}
+        ${_inlineField(projectId, index, pr, tmpl, 'Delta prefix', 'delta_prefix', pr.delta_prefix !== undefined ? pr.delta_prefix : 'delta-', 'delta-', 'style="width:100px"')}
         ${_inlineField(projectId, index, pr, tmpl, 'Delta suffix', 'delta_suffix', pr.delta_suffix || '', '', 'style="width:100px"')}
         ${_inlineField(projectId, index, pr, tmpl, 'Actual suffix', 'actual_suffix', pr.actual_suffix || '', '', 'style="width:100px"')}
       </div>
@@ -470,6 +471,7 @@ function _editProfile(projectId, index) {
 }
 
 function _removeProfile(projectId, index) {
+  if (!confirm('Remove this profile?')) return;
   _editingProfiles[projectId].splice(index, 1);
   _profileEditing = -1;
   _renderProfilesList(projectId);
@@ -495,7 +497,7 @@ async function _addProfileFromTemplate(projectId) {
       failures_dir: t.failures_dir,
       golden_dir: t.golden_dir || '',
       golden_patterns: t.golden_patterns || [],
-      delta_prefix: t.delta_prefix || 'delta-',
+      delta_prefix: t.delta_prefix !== undefined ? t.delta_prefix : 'delta-',
       delta_suffix: t.delta_suffix || '',
       actual_suffix: t.actual_suffix || '',
       template_id: t.id,
@@ -564,11 +566,13 @@ async function _addProject() {
 }
 
 async function _deleteProject(id) {
+  if (!confirm('Remove this project?')) return;
   await apiDelete(`/api/projects/${id}`);
   await _loadHome();
 }
 
 async function _deleteScan(id) {
+  if (!confirm('Delete this scan?')) return;
   await apiDelete(`/api/scans/${id}`);
   await _loadHome();
 }
