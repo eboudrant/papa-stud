@@ -64,6 +64,19 @@ function createWindow() {
 
   mainWindow.loadURL(`http://127.0.0.1:${PORT}/?electron=1`);
   mainWindow.on('closed', () => { mainWindow = null; });
+
+  // Handle file downloads — save to Downloads folder
+  mainWindow.webContents.session.on('will-download', (event, item) => {
+    const downloadsPath = app.getPath('downloads');
+    const filePath = path.join(downloadsPath, item.getFilename());
+    item.setSavePath(filePath);
+    item.once('done', (e, state) => {
+      if (state === 'completed') {
+        console.log(`Downloaded: ${filePath}`);
+        require('electron').shell.showItemInFolder(filePath);
+      }
+    });
+  });
 }
 
 function buildMenu() {

@@ -321,13 +321,20 @@ async function _exportVideo(scanId) {
     return;
   }
 
-  const failureCount = _scanData.stats.total;
+  // Pass current filters to video endpoint
+  const params = new URLSearchParams();
+  if (_activeModule) params.set('module', _activeModule);
+  if (_activeProfile) params.set('profile', _activeProfile);
+  if (_searchQuery) params.set('q', _searchQuery);
+  const qs = params.toString();
+  const filterLabel = _activeProfile || _activeModule || '';
+  const failureCount = _allFailures.length;
   btn.disabled = true;
   btn.textContent = 'Generating...';
-  showToast(`Generating video (${failureCount} frames)... this may take a moment.`);
+  showToast(`Generating video (${failureCount} frames${filterLabel ? ' — ' + filterLabel : ''})...`);
 
   try {
-    const res = await fetch(`/api/scans/${scanId}/video`, { method: 'POST' });
+    const res = await fetch(`/api/scans/${scanId}/video${qs ? '?' + qs : ''}`, { method: 'POST' });
     if (!res.ok) {
       const err = await res.json();
       showToast(err.error || 'Export failed', 'error', 6000);
