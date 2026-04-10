@@ -76,9 +76,9 @@ function cleanupOldJobs() {
 function runScan(jobId, projectId, name, projectPath, profiles) {
   const job = jobs.get(jobId);
   if (!job) return;
-  try {
-    const gen = scanProjectIncrementalSync(projectPath, job._cancelFn, profiles);
-    const processNext = () => {
+  const gen = scanProjectIncrementalSync(projectPath, job._cancelFn, profiles);
+  const processNext = () => {
+    try {
       const { value, done } = gen.next();
       if (done) {
         job.status = 'completed';
@@ -112,13 +112,13 @@ function runScan(jobId, projectId, name, projectPath, profiles) {
       }
       // Yield to event loop between phases
       setImmediate(processNext);
-    };
-    processNext();
-  } catch (e) {
-    job.status = 'failed';
-    job.error = e.message;
-    job._finished_at = Date.now();
-  }
+    } catch (e) {
+      job.status = 'failed';
+      job.error = e.message;
+      job._finished_at = Date.now();
+    }
+  };
+  processNext();
 }
 
 // --- Watcher management ---

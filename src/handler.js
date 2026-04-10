@@ -91,7 +91,8 @@ function createRouter() {
   // --- Config ---
 
   function sendExportBundle(res, filename, bundle) {
-    res.set('Content-Disposition', `attachment; filename="${filename}"`);
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    res.set('Content-Disposition', `attachment; filename="${safeName}"`);
     res.set('Content-Type', 'application/json');
     res.send(JSON.stringify(bundle, null, 2));
   }
