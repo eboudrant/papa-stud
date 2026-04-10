@@ -144,10 +144,6 @@ function _updateNav(hash) {
       const el = nav.querySelector(`[data-nav-key="${item.key}"]`);
       if (el) {
         el.innerHTML = item.content;
-        // Re-attach back handler since innerHTML clears it
-        if (item.key === 'back') {
-          el.onclick = _navGoBack;
-        }
       }
     }
     _navKeys = newKeys;
