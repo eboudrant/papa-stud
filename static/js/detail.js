@@ -110,7 +110,10 @@ function showDetail(scanId, filename) {
     document.removeEventListener('mouseup', _onPanUp);
     _heldKeys.clear();
     if (_moveLoop) { cancelAnimationFrame(_moveLoop); _moveLoop = null; }
+    if (_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
     _panDrag = null;
+    // Clean up any active slider drag listeners
+    if (_sliderCleanup) { _sliderCleanup(); _sliderCleanup = null; }
   };
 }
 
@@ -288,6 +291,7 @@ function _setViewMode(mode, scanId) {
 
 let _sliderDragging = false;
 let _sliderPct = 50;
+let _sliderCleanup = null;
 
 function _initSliderDrag() {
   const handle = document.getElementById('slider-handle');
@@ -307,8 +311,11 @@ function _initSliderDrag() {
     viewport.style.aspectRatio = `${w} / ${h}`;
     _updateSliderClip();
   };
-  if (actual.complete && golden.complete) { loaded = 1; onLoad(); }
-  else { actual.onload = onLoad; golden.onload = onLoad; }
+  if (actual.complete) loaded++;
+  else actual.onload = onLoad;
+  if (golden.complete) loaded++;
+  else golden.onload = onLoad;
+  if (loaded >= 2) onLoad();
   _updateSliderClip();
 
   const onMove = (e) => {
@@ -340,6 +347,8 @@ function _initSliderDrag() {
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onUp);
   });
+
+  _sliderCleanup = onUp;
 }
 
 function _updateSliderClip() {
