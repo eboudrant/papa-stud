@@ -228,7 +228,12 @@ function createRouter() {
       res.set('Content-Type', 'video/mp4');
       const stat = fs.statSync(tmpFile);
       res.set('Content-Length', String(stat.size));
-      fs.createReadStream(tmpFile).pipe(res).on('finish', () => {
+      const stream = fs.createReadStream(tmpFile);
+      stream.on('error', () => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        if (!res.headersSent) res.status(500).end();
+      });
+      stream.pipe(res).on('finish', () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       });
     } catch (e) {

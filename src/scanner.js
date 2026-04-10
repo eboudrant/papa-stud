@@ -413,8 +413,7 @@ function parseJunitXml(modulePath) {
 function parseSingleJunitXml(xmlPath) {
   try {
     const content = fs.readFileSync(xmlPath, 'utf8');
-    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
-    const parsed = parser.parse(content);
+    const parsed = xmlParser.parse(content);
     const root = parsed.testsuite;
     if (!root) return null;
     return {
