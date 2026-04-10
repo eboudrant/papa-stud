@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Papa Stud.io</title>
+<meta name="description" content="Screenshot failure reviewer for Android testing tools">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: #121212; color: #e4e4e4;
+  line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+a { color: #4d8eff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+pre { background: #181818; border: 1px solid #2e2e2e; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; color: #a0a0a0; }
+
+.container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+section { padding: 24px 0; }
+h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+p { color: #a0a0a0; font-size: 14px; }
+ul { list-style: none; margin-top: 4px; }
+ul li { font-size: 14px; color: #a0a0a0; padding: 2px 0; }
+ul li::before { content: '\2013'; color: #666; margin-right: 8px; }
+.title-io { font-weight: 300; color: #666; }
+
+header {
+  background: #1e1e1e; border-bottom: 1px solid #2e2e2e;
+  padding: 0 24px; height: 44px; display: flex; align-items: center;
+  position: sticky; top: 0; z-index: 10;
+}
+header .container { display: flex; align-items: center; width: 100%; }
+header h1 { font-size: 16px; }
+header nav { display: flex; gap: 16px; margin-left: auto; }
+header nav a { font-size: 13px; font-weight: 500; color: #a0a0a0; }
+header nav a:hover { color: #e4e4e4; text-decoration: none; }
+
+.hero { padding-top: 48px; padding-bottom: 48px; text-align: center; }
+.hero h1 { font-size: 32px; margin-bottom: 8px; }
+.hero p { font-size: 22px; max-width: 600px; margin: 0 auto; line-height: 1.5; }
+.hero-actions { display: flex; gap: 8px; justify-content: center; margin-bottom: 48px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 500;
+  text-decoration: none; border: 1px solid #2e2e2e; color: #e4e4e4; background: #1e1e1e;
+}
+.btn:hover { border-color: #666; text-decoration: none; }
+.btn-primary { background: #4d8eff; color: white; border-color: #4d8eff; }
+.btn-primary:hover { background: #3a7be8; border-color: #3a7be8; }
+.hero img {
+  width: 100%; border-radius: 8px; border: 1px solid #2e2e2e;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.screenshots-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+.screenshot img { width: 100%; border-radius: 6px; border: 1px solid #2e2e2e; }
+.screenshot p { font-size: 11px; color: #666; margin-top: 4px; }
+
+.pre-wrap { position: relative; }
+.pre-wrap pre { margin: 0; }
+.btn-copy { position: absolute; top: 8px; right: 8px; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; background: #1e1e1e; border: 1px solid #2e2e2e; color: #a0a0a0; cursor: pointer; font-family: inherit; }
+.btn-copy:hover { color: #e4e4e4; border-color: #666; }
+
+footer { padding: 32px 0; border-top: 1px solid #2e2e2e; text-align: center; font-size: 12px; color: #666; }
+footer a { color: #a0a0a0; }
+.footer-links { display: flex; gap: 16px; justify-content: center; margin-bottom: 8px; }
+
+.reveal { opacity: 0; transform: translateY(12px); transition: opacity 0.4s ease, transform 0.4s ease; }
+.reveal.visible { opacity: 1; transform: none; }
+
+@media (max-width: 640px) {
+  .hero h1 { font-size: 24px; }
+  .install-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>Papa Stud<span class="title-io">.io</span></h1>
+    <nav>
+      <a href="https://github.com/eboudrant/papa-stud" title="GitHub"><svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    </nav>
+  </div>
+</header>
+
+<div class="container">
+
+<section class="hero">
+  <p class="reveal">Screenshot failure reviewer for Android testing tools. Scans your Gradle project and lets you review failures side-by-side.</p>
+</section>
+
+<section id="features">
+  <h2 class="reveal">Features</h2>
+  <ul class="reveal">
+    <li>Supports Paparazzi, Roborazzi, and Compose Screenshot Testing</li>
+    <li>Delta, toggle, and slider comparison modes with zoom and pan</li>
+    <li>Scans multi-module Gradle projects</li>
+    <li>Real-time file watching</li>
+    <li>Video export of failures</li>
+  </ul>
+</section>
+
+<section id="install">
+  <h2 class="reveal">Install</h2>
+  <div class="pre-wrap reveal">
+    <pre>brew tap eboudrant/tap
+brew install --cask papastud</pre>
+    <button class="btn-copy" onclick="_copy(this)">Copy</button>
+  </div>
+</section>
+
+<section id="screenshots">
+  <h2 class="reveal">Screenshots</h2>
+  <div class="screenshots-grid reveal">
+    <div class="screenshot"><img src="assets/screenshots/home-dark.png" alt="Home"><p>Home</p></div>
+    <div class="screenshot"><img src="assets/screenshots/review-grid-dark.png" alt="Review"><p>Review</p></div>
+    <div class="screenshot"><img src="assets/screenshots/detail-dark.png" alt="Detail"><p>Detail</p></div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <div class="footer-links">
+    <a href="https://github.com/eboudrant/papa-stud">GitHub</a>
+    <a href="https://github.com/eboudrant/papa-stud/issues">Issues</a>
+    <a href="https://github.com/eboudrant/papa-stud/releases">Releases</a>
+  </div>
+  <p>Papa Stud.io</p>
+</footer>
+
+<script>
+function _copy(btn) {
+  const text = btn.parentElement.querySelector('pre').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  });
+}
+
+const obs = new IntersectionObserver((entries) => {
+  for (const e of entries) { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } }
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', (e) => {
+    const t = document.querySelector(a.getAttribute('href'));
+    if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth' }); }
+  });
+});
+</script>
+</body>
+</html>
