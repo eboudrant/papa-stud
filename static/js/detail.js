@@ -117,10 +117,14 @@ function showDetail(scanId, filename) {
 async function _loadDetail(scanId, filename) {
   const data = await apiGet(`/api/scans/${scanId}?page=0&size=10000`);
   _detailScan = data;
-  setNavContext({ projectName: data.projectName });
   _detailFailures = data.failures;
   _detailIndex = _detailFailures.findIndex(f => f.filename === filename);
   _detailFailure = _detailIndex >= 0 ? _detailFailures[_detailIndex] : null;
+  setNavContext({
+    projectName: data.projectName,
+    className: _detailFailure?.class_name || '',
+    methodName: _detailFailure?.method || '',
+  });
 
   if (!_detailFailure) {
     document.getElementById('content').innerHTML = '<div class="empty-state">Failure not found</div>';
@@ -224,10 +228,9 @@ function _renderDetail(scanId) {
   content.innerHTML = `
     <div class="detail">
       <div class="detail-header">
-        <a class="btn" href="#/scans/${scanId}">Back</a>
         <div class="detail-meta">
           <span class="detail-title">${escHtml(f.class_name || f.filename)}</span>
-          <span class="detail-subtitle">${escHtml(f.package)}${f.method ? '.' + escHtml(f.method) : ''}${f.snapshot_name ? ' / ' + escHtml(f.snapshot_name) : ''}</span>
+          <span class="detail-subtitle">${f.method ? escHtml(f.method) : ''}${f.snapshot_name ? ' / ' + escHtml(f.snapshot_name) : ''}</span>
         </div>
         <div class="detail-mode-tabs">
           ${hasDelta ? `<button class="pill ${_viewMode === 'delta' ? 'active' : ''}" onclick="_setViewMode('delta', '${scanId}')">Delta (1)</button>` : ''}
@@ -350,7 +353,7 @@ function _detailNext(scanId) {
     _detailIndex++;
     _detailFailure = _detailFailures[_detailIndex];
 
-    navigate(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
+    navigateReplace(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
   }
 }
 
@@ -359,7 +362,7 @@ function _detailPrev(scanId) {
     _detailIndex--;
     _detailFailure = _detailFailures[_detailIndex];
 
-    navigate(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
+    navigateReplace(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
   }
 }
 

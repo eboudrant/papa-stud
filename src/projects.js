@@ -340,13 +340,31 @@ function computeStats(failures) {
   return stats;
 }
 
+function getDataDir() { return DATA_DIR; }
+
+function importProjects(incoming) {
+  const existing = readJson(projectsPath()) || [];
+  const byId = new Map(existing.map(p => [p.id, p]));
+  for (const p of incoming) {
+    byId.set(p.id, p);
+  }
+  writeJson(projectsPath(), [...byId.values()]);
+}
+
+function resetProjects() {
+  writeJson(projectsPath(), []);
+}
+
 module.exports = {
   setDataDir,
+  getDataDir,
   listProjects,
   addProject,
   getProject,
   updateProjectProfiles,
   deleteProject,
+  importProjects,
+  resetProjects,
   listScans,
   getScan,
   createScanFromResults,

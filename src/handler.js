@@ -10,6 +10,7 @@ const projects = require('./projects');
 const scanJobs = require('./scanJobs');
 const templates = require('./templates');
 const video = require('./video');
+const config = require('./config');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
 const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
@@ -85,6 +86,81 @@ function createRouter() {
     const relativePath = path.relative(projectRoot, resolved);
     if (relativePath.startsWith('..')) return res.status(403).json({ error: 'forbidden' });
     res.sendFile(relativePath, { root: projectRoot }); // codql[js/path-injection]: projectRoot is from server config, relativePath validated no ../
+  });
+
+  // --- Config ---
+
+  function sendExportBundle(res, filename, bundle) {
+    res.set('Content-Disposition', `attachment; filename="${filename}"`);
+    res.set('Content-Type', 'application/json');
+    res.send(JSON.stringify(bundle, null, 2));
+  }
+
+  router.get('/api/config/info', (req, res) => {
+    const allProjects = projects.listProjects();
+    const allTemplates = templates.listTemplates();
+    res.json({
+      dataDir: projects.getDataDir(),
+      projectCount: allProjects.length,
+      templateCount: allTemplates.filter(t => !t.builtin).length,
+    });
+  });
+
+  router.get('/api/config/export', (req, res) => {
+    const allProjects = projects.listProjects();
+    const customTemplates = templates.listTemplates().filter(t => !t.builtin);
+    sendExportBundle(res, 'papastud-config.json', config.createExportBundle(allProjects, customTemplates));
+  });
+
+  router.post('/api/config/import', (req, res) => {
+    let bundle;
+    try {
+      bundle = config.migrate(req.body);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    let imported = { projects: 0, templates: 0 };
+    if (bundle.projects && bundle.projects.length) {
+      projects.importProjects(bundle.projects);
+      imported.projects = bundle.projects.length;
+    }
+    if (bundle.templates && bundle.templates.length) {
+      templates.importTemplates(bundle.templates);
+      imported.templates = bundle.templates.length;
+    }
+    res.json(imported);
+  });
+
+  router.get('/api/config/export/project/:id', (req, res) => {
+    const project = projects.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: 'project not found' });
+    sendExportBundle(res, `papastud-project-${project.name}.json`, config.createExportBundle([project], []));
+  });
+
+  router.get('/api/config/export/template/:id', (req, res) => {
+    const t = templates.getTemplate(req.params.id);
+    if (!t || t.builtin) return res.status(404).json({ error: 'custom template not found' });
+    sendExportBundle(res, `papastud-template-${t.name}.json`, config.createExportBundle([], [t]));
+  });
+
+  router.post('/api/config/import/project', (req, res) => {
+    const body = req.body;
+    if (!body || !body.id || !body.path) return res.status(400).json({ error: 'invalid project data' });
+    projects.importProjects([body]);
+    res.json({ imported: 1 });
+  });
+
+  router.post('/api/config/import/template', (req, res) => {
+    const body = req.body;
+    if (!body || !body.id || !body.name) return res.status(400).json({ error: 'invalid template data' });
+    templates.importTemplates([body]);
+    res.json({ imported: 1 });
+  });
+
+  router.post('/api/config/reset', (req, res) => {
+    projects.resetProjects();
+    templates.resetTemplates();
+    res.json({ reset: true });
   });
 
   // --- API POST ---

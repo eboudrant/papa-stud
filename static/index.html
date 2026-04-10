@@ -12,22 +12,35 @@
       <h1>Papa Stud<span class="title-io">.io</span></h1>
     </a>
     <nav id="nav-bar" class="nav-bar"></nav>
-    <button class="btn-theme" onclick="_toggleTheme()" title="Toggle theme">&#9681;</button>
+    <a href="#/settings" class="btn-icon" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></a>
   </header>
   <div id="content"></div>
 
   <script>
-    // Theme: load from localStorage before paint
-    (function() {
-      const t = localStorage.getItem('papastud_theme') || 'light';
-      document.documentElement.setAttribute('data-theme', t);
-    })();
-    function _toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme') || 'light';
-      const next = current === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('papastud_theme', next);
+    // Theme: system | light | dark
+    function _getSystemTheme() {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
+    function _applyTheme() {
+      const pref = localStorage.getItem('papastud_theme') || 'system';
+      const resolved = pref === 'system' ? _getSystemTheme() : pref;
+      document.documentElement.setAttribute('data-theme', resolved);
+    }
+    function _setTheme(value) {
+      localStorage.setItem('papastud_theme', value);
+      _applyTheme();
+    }
+    function _toggleTheme() {
+      const pref = localStorage.getItem('papastud_theme') || 'system';
+      const order = ['system', 'light', 'dark'];
+      const next = order[(order.indexOf(pref) + 1) % order.length];
+      _setTheme(next);
+    }
+    _applyTheme();
+    // Follow OS changes when set to system
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if ((localStorage.getItem('papastud_theme') || 'system') === 'system') _applyTheme();
+    });
     // Ctrl+Shift+L to toggle theme
     document.addEventListener('keydown', function(e) {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'L') {
@@ -35,10 +48,16 @@
         _toggleTheme();
       }
     });
+    // Double-click header to maximize/unmaximize (Electron)
+    document.querySelector('header').addEventListener('dblclick', function(e) {
+      if (e.target.closest('a, button, input, select')) return;
+      if (window.electronAPI) window.electronAPI.toggleMaximize();
+    });
   </script>
   <script src="/static/js/api.js"></script>
   <script src="/static/js/router.js"></script>
   <script src="/static/js/home.js"></script>
+  <script src="/static/js/settings.js"></script>
   <script src="/static/js/review.js"></script>
   <script src="/static/js/detail.js"></script>
   <script src="/static/js/app.js"></script>

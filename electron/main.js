@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const projects = require('../src/projects');
@@ -59,9 +59,11 @@ function createWindow() {
     title: 'Papa Stud.io',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 6 },
+    backgroundColor: '#f5f5f0',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -153,6 +155,12 @@ function buildMenu() {
 }
 
 // --- Lifecycle ---
+
+ipcMain.on('toggle-maximize', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
 
 app.whenReady().then(async () => {
   setupLogging();
