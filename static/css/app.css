@@ -130,7 +130,7 @@ select.input { appearance: auto; }
 .card-title { font-weight: 600; font-size: 14px; }
 .card-date { font-weight: 400; color: var(--text-dim); font-size: 12px; margin-left: 8px; }
 .card-subtitle { color: var(--text-dim); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-meta { color: var(--text-light); font-size: 12px; margin-top: 6px; }
+
 .card-actions { display: flex; gap: var(--space-sm); flex-shrink: 0; align-items: center; }
 
 /* Scan progress */
@@ -151,7 +151,6 @@ select.input { appearance: auto; }
 .test-bar { height: 4px; border-radius: 2px; display: flex; overflow: hidden; margin-top: 4px; background: var(--border); }
 .test-bar-passed { background: #16a34a; }
 .test-bar-failed { background: #dc2626; }
-.test-bar-skipped { background: #9ca3af; }
 
 /* Toast notifications */
 .toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -245,7 +244,7 @@ select.input { appearance: auto; }
 .review-layout { display: flex; height: 100%; overflow: hidden; }
 .sidebar {
   width: 240px; background: var(--surface); border-right: 1px solid var(--border);
-  padding: var(--space-md) 0; overflow-y: overlay; flex-shrink: 0;
+  padding: var(--space-md) 0; overflow-y: auto; flex-shrink: 0;
   scrollbar-width: thin;
 }
 .sidebar-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-dim); padding: 0 var(--space-md); margin-bottom: var(--space-sm); }
@@ -261,7 +260,7 @@ select.input { appearance: auto; }
 .tree-package { padding-left: 32px; color: var(--text-dim); font-size: 12px; }
 .tree-class { padding-left: 48px; color: var(--text-dim); font-size: 12px; }
 
-.review-main { flex: 1; min-width: 0; overflow-y: overlay; }
+.review-main { flex: 1; min-width: 0; overflow-y: auto; }
 .review-toolbar {
   display: flex; align-items: center; gap: 12px; padding: 12px 20px;
   border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap;
