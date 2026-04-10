@@ -112,7 +112,7 @@ Why this change exists.
 
 ## Changes
 
-### `path/to/file.py`
+### `path/to/file.js`
 - What changed and why
 
 ## Files modified
