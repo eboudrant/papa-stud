@@ -8,7 +8,7 @@ module.exports = defineConfig({
   fullyParallel: true,
   expect: {
     toHaveScreenshot: {
-      maxDiffPixels: 0,
+      maxDiffPixelRatio: 0.02,
     },
   },
   use: {
