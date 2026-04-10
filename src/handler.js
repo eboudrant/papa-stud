@@ -66,26 +66,28 @@ function createRouter() {
     if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'absolute path required' });
     }
-    const resolved = path.resolve(filePath);
-    const ext = path.extname(resolved).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
     if (ext !== '.png' && ext !== '.jpg' && ext !== '.jpeg') {
       return res.status(400).json({ error: 'only image files allowed' });
     }
+    // Resolve symlinks to prevent traversal via symlink targets
+    let real;
+    try { real = fs.realpathSync(filePath); } catch { return res.status(404).json({ error: 'not found' }); }
     // Find which project root this path belongs to
     const allProjects = projects.listProjects();
     let projectRoot = null;
     for (const p of allProjects) {
-      const root = path.resolve(p.path);
-      if (resolved.startsWith(root + path.sep)) {
+      let root;
+      try { root = fs.realpathSync(p.path); } catch { continue; }
+      if (real.startsWith(root + path.sep)) {
         projectRoot = root;
         break;
       }
     }
     if (!projectRoot) return res.status(403).json({ error: 'forbidden' });
-    // Serve relative to the validated project root — Express handles path safety
-    const relativePath = path.relative(projectRoot, resolved);
+    const relativePath = path.relative(projectRoot, real);
     if (relativePath.startsWith('..')) return res.status(403).json({ error: 'forbidden' });
-    res.sendFile(relativePath, { root: projectRoot }); // codql[js/path-injection]: projectRoot is from server config, relativePath validated no ../
+    res.sendFile(real);
   });
 
   // --- Config ---

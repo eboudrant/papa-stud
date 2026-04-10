@@ -73,6 +73,9 @@ function cleanupOldJobs() {
   }
 }
 
+// Periodic cleanup so completed jobs don't accumulate in long-running servers
+setInterval(cleanupOldJobs, JOB_TTL).unref();
+
 function runScan(jobId, projectId, name, projectPath, profiles) {
   const job = jobs.get(jobId);
   if (!job) return;
