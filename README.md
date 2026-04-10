@@ -4,9 +4,11 @@ Screenshot failure reviewer for Android testing tools (Paparazzi, Roborazzi, Com
 
 Scans your Gradle project for screenshot test failures, shows delta/golden/actual images side-by-side with diff percentages, and lets you review them in a clean UI.
 
-![Home](docs/assets/screenshots/home-dark.png)
-![Review](docs/assets/screenshots/review-grid-dark.png)
-![Detail](docs/assets/screenshots/detail-dark.png)
+<p>
+  <img src="docs/assets/screenshots/home-dark.png" width="32%">
+  <img src="docs/assets/screenshots/review-grid-dark.png" width="32%">
+  <img src="docs/assets/screenshots/detail-dark.png" width="32%">
+</p>
 
 ## Install
 
