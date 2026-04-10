@@ -487,7 +487,7 @@ async function _addProfileFromTemplate(projectId) {
     return;
   }
   // Add first available as a quick action, or show picker
-  const pick = prompt('Add template:\\n' + available.map((t, i) => `${i + 1}. ${t.name} (${t.tool})`).join('\\n') + '\\n\\nEnter number:');
+  const pick = prompt('Add template:\n' + available.map((t, i) => `${i + 1}. ${t.name} (${t.tool})`).join('\n') + '\n\nEnter number:');
   if (!pick) return;
   const idx = parseInt(pick) - 1;
   if (idx >= 0 && idx < available.length) {
@@ -615,12 +615,12 @@ function _pollScanJob(jobId, projectId) {
 
     if (job.status === 'discovering') {
       if (fill) fill.classList.add('progress-pulse');
-      if (text) text.textContent = `Discovering ${escHtml(job.currentModule)}...`;
+      if (text) text.textContent = `Discovering ${job.currentModule}...`;
     } else if (job.status === 'scanning') {
       if (fill) fill.classList.remove('progress-pulse');
       const pct = job.totalModules > 0 ? Math.round((job.scannedModules / job.totalModules) * 100) : 0;
       if (fill) fill.style.width = pct + '%';
-      if (text) text.textContent = `${escHtml(job.currentModule)} (${job.scannedModules}/${job.totalModules})`;
+      if (text) text.textContent = `${job.currentModule} (${job.scannedModules}/${job.totalModules})`;
     } else if (job.status === 'completed') {
       _stopPolling(jobId);
       if (job.scanId && job.failuresFound > 0) {
@@ -636,7 +636,7 @@ function _pollScanJob(jobId, projectId) {
       _restoreScanButton(projectId);
     } else if (job.status === 'failed') {
       _stopPolling(jobId);
-      showToast(`Scan failed: ${escHtml(job.error || 'unknown error')}`, 'error');
+      showToast(`Scan failed: ${job.error || 'unknown error'}`, 'error');
       _restoreScanButton(projectId);
     }
   }, 1500);

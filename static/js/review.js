@@ -77,6 +77,7 @@ function showReview(scanId) {
   return () => {
     if (_observer) _observer.disconnect();
     _stopWatchPoll();
+    clearTimeout(_searchTimeout);
     document.removeEventListener('keydown', _keyHandler);
   };
 }
