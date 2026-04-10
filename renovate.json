@@ -6,10 +6,6 @@
   "labels": ["dependencies"],
   "packageRules": [
     {
-      "matchManagers": ["pip_requirements"],
-      "groupName": "python dependencies"
-    },
-    {
       "matchManagers": ["npm"],
       "groupName": "npm dependencies"
     },

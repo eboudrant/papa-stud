@@ -41,7 +41,7 @@ jobs:
           done
 
       - name: Run unit tests
-        run: npm test || true
+        run: npm test
 
   screenshot-tests:
     name: Screenshot Tests
