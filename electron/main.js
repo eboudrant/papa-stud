@@ -6,8 +6,7 @@ const { createApp } = require('../src/handler');
 
 let mainWindow;
 let server;
-
-const PORT = 8770;
+let port;
 
 // --- Logging ---
 
@@ -41,11 +40,13 @@ function startServer() {
   const dataDir = path.join(app.getPath('userData'), 'data');
   projects.setDataDir(dataDir);
 
-  return new Promise(resolve => {
-    server = createApp().listen(PORT, '127.0.0.1', () => {
-      console.log(`Server running on http://127.0.0.1:${PORT}`);
+  return new Promise((resolve, reject) => {
+    server = createApp().listen(0, '127.0.0.1', () => {
+      port = server.address().port;
+      console.log(`Server running on http://127.0.0.1:${port}`);
       resolve();
     });
+    server.on('error', reject);
   });
 }
 
@@ -64,7 +65,7 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${PORT}/?electron=1`);
+  mainWindow.loadURL(`http://127.0.0.1:${port}/?electron=1`);
   mainWindow.on('closed', () => { mainWindow = null; });
 
   // Handle file downloads — save to Downloads folder

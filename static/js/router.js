@@ -67,7 +67,7 @@ function _updateNav(hash) {
   if (detailMatch) {
     const scanId = detailMatch[1];
     const filename = decodeURIComponent(detailMatch[2]);
-    const shortName = filename.replace(/\.png$/, '').split('_').pop() || filename;
+    const shortName = filename.replace(/\.png$/, '').replace(/^delta-/, '').replace(/_compare$/, '').replace(/_actual$/, '');
     nav.innerHTML = `
       <span class="nav-sep">/</span>
       <a class="nav-link" href="#/scans/${escHtml(scanId)}">${escHtml(projectName || 'Review')}</a>
