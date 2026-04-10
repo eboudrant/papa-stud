@@ -197,15 +197,11 @@ function _renderDetail(scanId) {
       : '<div class="pane-empty">No delta image</div>';
   } else if (_viewMode === 'toggle') {
     const src = _toggleShowing === 'golden' ? goldenSrc : effectiveActual;
-    const goldenFile = f.golden_path ? f.golden_path.split('/').pop() : '';
-    const actualFile = f.actual_path ? f.actual_path.split('/').pop() : f.delta_path ? f.delta_path.split('/').pop() : '';
     const title = _toggleShowing === 'golden' ? 'Expected (Golden)' : (actualSrc ? 'Actual' : 'Delta');
-    const file = _toggleShowing === 'golden' ? goldenFile : actualFile;
-    const label = `${title}${file ? '<br><span class="toggle-file">' + escHtml(file) + '</span>' : ''}`;
     viewContent = src
       ? `<div class="detail-fullview">
           <div class="detail-view-area" id="view-area">
-            <div class="toggle-label">${label} <span class="label-hint">press T to toggle</span></div>
+            <div class="toggle-label">${title} <span class="label-hint">press T to toggle</span></div>
             <img src="${src}" id="detail-img">
           </div>
           ${zoomBar}

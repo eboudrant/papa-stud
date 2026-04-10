@@ -338,12 +338,11 @@ select.input { appearance: auto; }
 .zoom-controls span { font-size: 12px; color: var(--text-dim); min-width: 48px; text-align: center; }
 .toggle-label {
   position: absolute; top: 12px; left: 12px; z-index: 5;
-  font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-dim);
-  background: rgba(255,255,255,0.85); padding: 4px 10px; border-radius: 4px;
-  pointer-events: none;
+  font-size: 12px; font-weight: 600; text-transform: uppercase; color: rgba(255,255,255,0.9);
+  background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 4px;
+  pointer-events: none; backdrop-filter: blur(4px);
 }
-.label-hint { font-weight: 400; text-transform: none; color: var(--text-light); }
-.toggle-file { font-weight: 400; text-transform: none; font-size: 11px; opacity: 0.8; }
+.label-hint { font-weight: 400; text-transform: none; color: rgba(255,255,255,0.5); }
 .size-warning { font-size: 11px; color: #f59e0b; background: rgba(245, 158, 11, 0.12); padding: 2px 8px; border-radius: 4px; margin-left: auto; }
 
 /* Slider mode */
