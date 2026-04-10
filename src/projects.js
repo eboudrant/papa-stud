@@ -372,6 +372,5 @@ module.exports = {
   updateScanModule,
   updateFailureStatus,
   batchUpdateStatus,
-  isPathUnderProject,
   scanPath,
 };

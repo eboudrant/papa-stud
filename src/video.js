@@ -146,7 +146,6 @@ const FONT_H = 7;
 const FONT_SPACING = 1;
 
 // Compact 5x7 font glyphs — each char is 7 rows of 5-bit bitmaps
-const GLYPHS = {};
 const GLYPH_DATA = {
   ' ': [0,0,0,0,0,0,0],
   '!': [4,4,4,4,4,0,4],
@@ -334,10 +333,6 @@ function crc32(buf) {
     for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
   }
   return crc ^ 0xFFFFFFFF;
-}
-
-function escapeDrawtext(text) {
-  return text.replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/:/g, '\\:');
 }
 
 module.exports = { hasFfmpeg, generateVideo };
