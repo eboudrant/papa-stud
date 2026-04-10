@@ -12,7 +12,7 @@ const CURRENT_VERSION = 1;
 
 // Migrations keyed by target version.
 // Each fn(bundle) transforms from (version-1) to (version).
-const MIGRATIONS = {};
+const MIGRATIONS = new Map();
 
 function migrate(bundle) {
   if (!bundle || typeof bundle.version !== 'number') {
@@ -24,9 +24,8 @@ function migrate(bundle) {
   let current = bundle.version;
   while (current < CURRENT_VERSION) {
     const next = current + 1;
-    const fn = MIGRATIONS[next];
-    if (!fn) throw new Error(`missing migration from version ${current} to ${next}`);
-    bundle = fn(bundle);
+    if (!MIGRATIONS.has(next)) throw new Error(`missing migration from version ${current} to ${next}`);
+    bundle = MIGRATIONS.get(next)(bundle);
     current = next;
   }
   bundle.version = CURRENT_VERSION;
