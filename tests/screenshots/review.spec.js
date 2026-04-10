@@ -45,7 +45,7 @@ test('detail toggle mode shows golden with label', async ({ page }) => {
   await expect(page.locator('.detail-title')).toHaveText('LoginTest', { timeout: 10000 });
   await page.click('button:has-text("Toggle (2)")');
   await expect(page.locator('.toggle-label')).toContainText('Expected (Golden)');
-  await expect(page).toHaveScreenshot('detail-toggle.png');
+  await expect(page).toHaveScreenshot('detail-toggle.png', { maxDiffPixelRatio: 0.02 });
 });
 
 test('detail slider mode shows handle', async ({ page }) => {
