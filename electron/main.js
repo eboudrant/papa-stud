@@ -59,7 +59,6 @@ function createWindow() {
     title: 'Papa Stud.io',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 6 },
-    backgroundColor: '#f5f5f0',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
