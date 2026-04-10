@@ -73,18 +73,18 @@ function _renderProjects(projectsList) {
         <div class="card-profiles">${profileTags}</div>
       </div>
       <div class="card-actions" id="actions-${p.id}">
-        <button class="btn btn-sm" onclick="_showProfiles('${p.id}')">Profiles</button>
-        <button class="btn btn-primary" onclick="_scanProject('${p.id}')">Scan</button>
-        <button class="btn btn-danger-text" onclick="_deleteProject('${p.id}')">Remove</button>
+        <button class="btn btn-sm" onclick="_showProfiles('${escAttr(p.id)}')">Profiles</button>
+        <button class="btn btn-primary" onclick="_scanProject('${escAttr(p.id)}')">Scan</button>
+        <button class="btn btn-danger-text" onclick="_deleteProject('${escAttr(p.id)}')">Remove</button>
       </div>
     </div>
     <div class="profiles-form" id="profiles-${p.id}" style="display:none">
       <div class="profiles-list" id="profiles-list-${p.id}"></div>
       <div class="profiles-actions">
-        <button class="btn btn-sm" onclick="_addProfileFromTemplate('${p.id}')">Add from Template</button>
-        <button class="btn btn-sm" onclick="_addCustomProfile('${p.id}')">Add Custom</button>
-        <button class="btn btn-sm btn-primary" onclick="_saveProfiles('${p.id}')">Save</button>
-        <button class="btn btn-sm" onclick="_hideProfiles('${p.id}')">Cancel</button>
+        <button class="btn btn-sm" onclick="_addProfileFromTemplate('${escAttr(p.id)}')">Add from Template</button>
+        <button class="btn btn-sm" onclick="_addCustomProfile('${escAttr(p.id)}')">Add Custom</button>
+        <button class="btn btn-sm btn-primary" onclick="_saveProfiles('${escAttr(p.id)}')">Save</button>
+        <button class="btn btn-sm" onclick="_hideProfiles('${escAttr(p.id)}')">Cancel</button>
       </div>
     </div>`;
   }).join('');
@@ -115,7 +115,7 @@ function _renderScans(scansList) {
           ${snapStats ? snapshotBar(snapStats.snapshots, snapStats.failures, 'scan-test-bar') : ''}
         </a>
         <div class="card-actions">
-          <button class="btn btn-sm btn-danger-text" onclick="_deleteScan('${s.id}')">Delete</button>
+          <button class="btn btn-sm btn-danger-text" onclick="_deleteScan('${escAttr(s.id)}')">Delete</button>
         </div>
       </div>
     `;
@@ -657,9 +657,9 @@ function _restoreScanButton(projectId) {
   const actionsEl = document.getElementById(`actions-${projectId}`);
   if (actionsEl) {
     actionsEl.innerHTML = `
-      <button class="btn btn-sm" onclick="_showProfiles('${projectId}')">Profiles</button>
-      <button class="btn btn-primary" onclick="_scanProject('${projectId}')">Scan</button>
-      <button class="btn btn-danger-text" onclick="_deleteProject('${projectId}')">Remove</button>
+      <button class="btn btn-sm" onclick="_showProfiles('${escAttr(projectId)}')">Profiles</button>
+      <button class="btn btn-primary" onclick="_scanProject('${escAttr(projectId)}')">Scan</button>
+      <button class="btn btn-danger-text" onclick="_deleteProject('${escAttr(projectId)}')">Remove</button>
     `;
   }
 }
