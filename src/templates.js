@@ -124,12 +124,28 @@ function templateToProfile(template) {
   return profile;
 }
 
+function importTemplates(incoming) {
+  const custom = readCustom();
+  const byId = new Map(custom.map(t => [t.id, t]));
+  for (const t of incoming) {
+    if (BUILTIN_TEMPLATES.some(b => b.id === t.id)) continue;
+    byId.set(t.id, { ...t, builtin: false });
+  }
+  writeCustom([...byId.values()]);
+}
+
+function resetTemplates() {
+  writeCustom([]);
+}
+
 module.exports = {
   BUILTIN_TEMPLATES,
   listTemplates,
   getTemplate,
   createTemplate,
   deleteTemplate,
+  importTemplates,
+  resetTemplates,
   templateToProfile,
   setDataDir,
 };
