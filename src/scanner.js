@@ -73,8 +73,9 @@ function* scanProjectIncrementalSync(projectPath, cancelFn, profiles) {
 }
 
 function processSingleModule(failuresDir, moduleName, modulePath, profiles) {
-  const [testStats, xmlMtime] = parseJunitXml(modulePath);
-  const diffPcts = parseDiffPercentages(modulePath);
+  const needsJunit = !profiles || !profiles.length || profiles.some(p => (p.result_source || 'junit') === 'junit');
+  const [testStats, xmlMtime] = needsJunit ? parseJunitXml(modulePath) : [null, 0];
+  const diffPcts = needsJunit ? parseDiffPercentages(modulePath) : {};
   const moduleFailures = [];
   const profileCounts = {};
   let totalSnapshots = 0;
@@ -84,9 +85,10 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles) {
       const pname = profile.name;
       const fDir = path.join(modulePath, profile.failures_dir);
       const gp = buildGoldenPatterns(profile);
+      const useJunit = (profile.result_source || 'junit') === 'junit';
       const pf = processProfile(
         fDir, modulePath, moduleName, pname,
-        testStats, xmlMtime, gp, diffPcts,
+        useJunit ? testStats : null, useJunit ? xmlMtime : 0, gp, useJunit ? diffPcts : {},
         profile.delta_prefix !== undefined ? profile.delta_prefix : 'delta-',
         profile.delta_suffix || '',
         profile.actual_suffix || '',
