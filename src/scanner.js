@@ -12,6 +12,9 @@ const fg = require('fast-glob');
 const { parseFilename } = require('./filenameParser');
 const { parseJunitXml, parseDiffPercentages } = require('./junitParser');
 
+const DEBUG = process.env.PAPASTUD_DEBUG === '1';
+const log = (...args) => { if (DEBUG) console.log(...args); };
+
 const MTIME_CLUSTER_TOLERANCE = 60.0;
 
 const BUILD_ALLOWED = new Set(['paparazzi', 'test-results', 'outputs']);
@@ -156,11 +159,16 @@ function processProfile(
   }
 
   let current = detectCurrentFailures(failuresDir, deltaPrefix, deltaSuffix);
-  // Filter out delta files older than the latest JUnit XML run.
-  // A delta older than the XML was produced by a previous test run and is stale,
-  // regardless of whether current tests pass or fail.
-  if (xmlMtime > 0 && current.length) {
+  log(`[scan] ${profileName} in ${failuresDir}: ${current.length} candidates, xmlMtime=${xmlMtime}, testStats.failed=${testStats?.failed}`);
+  // If JUnit XML reports 0 failures, all deltas are stale leftovers
+  if (testStats && testStats.failed === 0 && xmlMtime > 0) {
+    if (current.length) log(`[scan] all tests pass — filtering all ${current.length} stale deltas`);
+    current = [];
+  } else if (xmlMtime > 0 && current.length) {
+    // Filter out delta files older than the latest JUnit XML run
+    const before = current.length;
     current = current.filter(f => fs.statSync(f).mtimeMs / 1000 > xmlMtime - MTIME_CLUSTER_TOLERANCE);
+    if (current.length < before) log(`[scan] filtered ${before - current.length} stale deltas (older than xmlMtime ${xmlMtime})`);
   }
 
   const goldenCache = {};
