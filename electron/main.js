@@ -58,7 +58,7 @@ function createWindow() {
     height: 900,
     title: 'Papa Stud.io',
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 12, y: 6 },
+    trafficLightPosition: { x: 12, y: 13 },
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
