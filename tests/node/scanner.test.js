@@ -144,6 +144,30 @@ describe('scanProject', () => {
     assert.equal(result.failures.length, 0);
   });
 
+  it('stale delta filtered when xml newer even with failures', () => {
+    const root = tmpdir;
+    const failures = path.join(root, 'app', 'build', 'paparazzi', 'failures');
+    const xmlDir = path.join(root, 'app', 'build', 'test-results', 'testDebugUnitTest');
+    fs.mkdirSync(failures, { recursive: true });
+    fs.mkdirSync(xmlDir, { recursive: true });
+
+    // Stale delta from a previous run (very old mtime)
+    makePng(path.join(failures, 'delta-com.example_OldTest_oldMethod.png'));
+    fs.utimesSync(path.join(failures, 'delta-com.example_OldTest_oldMethod.png'), new Date(1000000000), new Date(1000000000));
+
+    // Fresh delta from current run
+    makePng(path.join(failures, 'delta-com.example_NewTest_newMethod.png'));
+
+    // XML says 1 failure (not 0) — stale delta should still be filtered
+    const xml = '<?xml version="1.0"?><testsuite tests="2" failures="1" errors="0" skipped="0" time="1.0"><testcase name="newMethod" classname="NewTest" time="0.5"><failure message="differ (by 1.5%)">delta-com.example_NewTest_newMethod.png</failure></testcase><testcase name="oldMethod" classname="OldTest" time="0.5"/></testsuite>';
+    fs.writeFileSync(path.join(xmlDir, 'TEST-Tests.xml'), xml);
+
+    const result = scanProject(root);
+    // Only the fresh delta should be included, not the stale one
+    assert.equal(result.failures.length, 1);
+    assert.equal(result.failures[0].filename, 'com.example_NewTest_newMethod.png');
+  });
+
   it('snapshot count included', () => {
     const root = tmpdir;
     const paparazzi = path.join(root, 'app', 'build', 'paparazzi');
