@@ -9,12 +9,16 @@ const projects = require('./projects');
 const { scanProjectIncrementalSync, processSingleModule } = require('./scanner');
 const { createWatcher } = require('./watcher');
 
+const DEBUG = process.env.PAPASTUD_DEBUG === '1';
+const log = (...args) => { if (DEBUG) console.log(...args); };
+
 const jobs = new Map();
 const watchers = new Map(); // scanId -> watcher
 const JOB_TTL = 300_000; // 5 minutes in ms
 
 function startScan(projectId, name, projectPath, profiles) {
   cleanupOldJobs();
+  log(`[scan] starting scan for "${name}" at ${projectPath} (${profiles?.length || 0} profiles)`);
   const jobId = crypto.randomBytes(4).toString('hex');
   let cancelled = false;
   const job = {
@@ -137,13 +141,16 @@ function startWatching(scanId) {
   const scanProfiles = project ? project.profiles : null;
 
   const onModuleChange = (moduleName, modulePath) => {
+    log(`[watch] rescanning module ${moduleName} at ${modulePath}`);
     const [moduleData, moduleFailures] = processSingleModule(
       null, moduleName, modulePath, scanProfiles
     );
+    log(`[watch] module ${moduleName}: ${moduleFailures.length} failures (profiles: ${Object.entries(moduleData.profile_counts).map(([k,v]) => `${k}=${v}`).join(', ')})`);
     projects.updateScanModule(scanId, moduleName, moduleData, moduleFailures);
   };
 
   // Rescan all modules immediately to pick up any changes since last scan
+  log(`[watch] start watching scan ${scanId} — rescanning ${(scan.modules || []).length} modules`);
   for (const mod of scan.modules || []) {
     const parts = mod.name.replace(/^:/, '').split(':');
     const modulePath = parts[0] !== 'root'
@@ -151,6 +158,7 @@ function startWatching(scanId) {
       : projectPath;
     onModuleChange(mod.name, modulePath);
   }
+  log(`[watch] initial rescan complete, starting file watcher`);
 
   const watcher = createWatcher(scan.modules, projectPath, onModuleChange, scanProfiles);
   watcher.start();

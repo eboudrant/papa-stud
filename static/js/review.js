@@ -376,7 +376,8 @@ async function _toggleWatch(scanId) {
   } else {
     await apiPost(`/api/scans/${scanId}/watch`, {});
     _watching = true;
-    _lastStatsJson = JSON.stringify(_scanData?.stats);
+    // Rescan happened server-side, reload to show updated results
+    _resetAndReload();
     _startWatchPoll(scanId);
   }
   _updateWatchUI();
