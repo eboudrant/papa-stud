@@ -158,8 +158,11 @@ function processProfile(
   }
 
   let current = detectCurrentFailures(failuresDir, deltaPrefix, deltaSuffix);
-  if (xmlMtime > 0 && current.length && testStats && testStats.failed === 0) {
-    current = current.filter(f => fs.statSync(f).mtimeMs / 1000 > xmlMtime);
+  // Filter out delta files older than the latest JUnit XML run.
+  // A delta older than the XML was produced by a previous test run and is stale,
+  // regardless of whether current tests pass or fail.
+  if (xmlMtime > 0 && current.length) {
+    current = current.filter(f => fs.statSync(f).mtimeMs / 1000 > xmlMtime - MTIME_CLUSTER_TOLERANCE);
   }
 
   const goldenCache = {};
