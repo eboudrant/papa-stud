@@ -9,10 +9,8 @@
 const fs = require('fs');
 const path = require('path');
 const fg = require('fast-glob');
-const { XMLParser } = require('fast-xml-parser');
 const { parseFilename } = require('./filenameParser');
-
-const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+const { parseJunitXml, parseDiffPercentages } = require('./junitParser');
 
 const MTIME_CLUSTER_TOLERANCE = 60.0;
 
@@ -347,88 +345,6 @@ function detectCurrentFailures(failuresDir, deltaPrefix = 'delta-', deltaSuffix 
     }
   }
   return current;
-}
-
-function parseDiffPercentages(modulePath) {
-  const result = {};
-  for (const variant of ['testDebugUnitTest', 'testReleaseUnitTest']) {
-    const resultsDir = path.join(modulePath, 'build', 'test-results', variant);
-    if (!fs.existsSync(resultsDir)) continue;
-    const xmlFiles = fs.readdirSync(resultsDir).filter(f => f.startsWith('TEST-') && f.endsWith('.xml'));
-    for (const xmlFile of xmlFiles) {
-      try {
-        const content = fs.readFileSync(path.join(resultsDir, xmlFile), 'utf8');
-        const parser = xmlParser;
-        const parsed = parser.parse(content);
-        const suite = parsed.testsuite;
-        if (!suite) continue;
-        const testcases = Array.isArray(suite.testcase) ? suite.testcase : (suite.testcase ? [suite.testcase] : []);
-        for (const tc of testcases) {
-          const failure = tc.failure;
-          if (!failure) continue;
-          const msg = typeof failure === 'string' ? failure : (failure['@_message'] || '');
-          const pctMatch = msg.match(/differ \(by ([\d.]+)%\)/);
-          const deltaMatch = msg.match(/delta-([^\s]+\.png)/);
-          if (pctMatch && deltaMatch) {
-            const fname = deltaMatch[1].split('/').pop();
-            result[fname] = parseFloat(pctMatch[1]);
-          }
-        }
-      } catch {
-        // Skip unparseable XML
-      }
-    }
-  }
-  return result;
-}
-
-function parseJunitXml(modulePath) {
-  const stats = { tests: 0, passed: 0, failed: 0, skipped: 0, errors: 0, time: 0 };
-  let found = false;
-  let newestMtime = 0;
-
-  for (const variant of ['testDebugUnitTest', 'testReleaseUnitTest']) {
-    const resultsDir = path.join(modulePath, 'build', 'test-results', variant);
-    if (!fs.existsSync(resultsDir)) continue;
-    const xmlFiles = fs.readdirSync(resultsDir).filter(f => f.startsWith('TEST-') && f.endsWith('.xml'));
-    for (const xmlFile of xmlFiles) {
-      const fullPath = path.join(resultsDir, xmlFile);
-      const parsed = parseSingleJunitXml(fullPath);
-      if (parsed) {
-        found = true;
-        stats.tests += parsed.tests;
-        stats.failed += parsed.failed;
-        stats.skipped += parsed.skipped;
-        stats.errors += parsed.errors;
-        stats.time += parsed.time;
-        const mtime = fs.statSync(fullPath).mtimeMs / 1000;
-        if (mtime > newestMtime) newestMtime = mtime;
-      }
-    }
-  }
-
-  if (!found) return [null, 0];
-  stats.passed = stats.tests - stats.failed - stats.skipped - stats.errors;
-  stats.time = Math.round(stats.time * 100) / 100;
-  return [stats, newestMtime];
-}
-
-function parseSingleJunitXml(xmlPath) {
-  try {
-    const content = fs.readFileSync(xmlPath, 'utf8');
-    const parsed = xmlParser.parse(content);
-    const root = parsed.testsuite;
-    if (!root) return null;
-    return {
-      tests: parseInt(root['@_tests'] || '0'),
-      failed: parseInt(root['@_failures'] || '0'),
-      skipped: parseInt(root['@_skipped'] || '0'),
-      errors: parseInt(root['@_errors'] || '0'),
-      time: parseFloat(root['@_time'] || '0'),
-    };
-  } catch {
-    return null;
-  }
 }
 
 // --- Compare mode (Compose Screenshot Testing) ---
