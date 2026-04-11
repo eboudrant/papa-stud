@@ -4,6 +4,7 @@
  */
 
 const crypto = require('crypto');
+const path = require('path');
 const projects = require('./projects');
 const { scanProjectIncrementalSync, processSingleModule } = require('./scanner');
 const { createWatcher } = require('./watcher');
@@ -141,6 +142,15 @@ function startWatching(scanId) {
     );
     projects.updateScanModule(scanId, moduleName, moduleData, moduleFailures);
   };
+
+  // Rescan all modules immediately to pick up any changes since last scan
+  for (const mod of scan.modules || []) {
+    const parts = mod.name.replace(/^:/, '').split(':');
+    const modulePath = parts[0] !== 'root'
+      ? path.join(projectPath, ...parts)
+      : projectPath;
+    onModuleChange(mod.name, modulePath);
+  }
 
   const watcher = createWatcher(scan.modules, projectPath, onModuleChange, scanProfiles);
   watcher.start();
