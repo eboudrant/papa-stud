@@ -167,10 +167,6 @@ function _showCreateTemplate() {
         <input class="input input-sm" id="tmpl-delta-prefix" placeholder="Delta prefix" value="delta-" style="width:100px">
         <input class="input input-sm" id="tmpl-delta-suffix" placeholder="Delta suffix" style="width:100px">
         <input class="input input-sm" id="tmpl-actual-suffix" placeholder="Actual suffix" style="width:100px">
-        <select class="input input-sm" id="tmpl-result-source" style="width:120px">
-          <option value="junit">JUnit XML</option>
-          <option value="files">Files only</option>
-        </select>
       </div>
       <div class="add-form-row">
         <textarea class="input input-sm input-wide" id="tmpl-patterns" rows="3" placeholder="Golden patterns (one per line, use {name})"></textarea>
@@ -196,7 +192,6 @@ async function _createTemplate() {
     delta_prefix: document.getElementById('tmpl-delta-prefix').value,
     delta_suffix: document.getElementById('tmpl-delta-suffix').value,
     actual_suffix: document.getElementById('tmpl-actual-suffix').value,
-    result_source: document.getElementById('tmpl-result-source').value,
   });
   document.getElementById('create-template-form').style.display = 'none';
   await _loadHome();
@@ -224,10 +219,6 @@ async function _editTemplate(id) {
         <input class="input input-sm" id="tmpl-delta-prefix" placeholder="Delta prefix" value="${escAttr(t.delta_prefix || 'delta-')}" style="width:100px">
         <input class="input input-sm" id="tmpl-delta-suffix" placeholder="Delta suffix" value="${escAttr(t.delta_suffix || '')}" style="width:100px">
         <input class="input input-sm" id="tmpl-actual-suffix" placeholder="Actual suffix" value="${escAttr(t.actual_suffix || '')}" style="width:100px">
-        <select class="input input-sm" id="tmpl-result-source" style="width:120px">
-          <option value="junit" ${(t.result_source || 'junit') === 'junit' ? 'selected' : ''}>JUnit XML</option>
-          <option value="files" ${t.result_source === 'files' ? 'selected' : ''}>Files only</option>
-        </select>
       </div>
       <div class="add-form-row">
         <textarea class="input input-sm input-wide" id="tmpl-patterns" rows="3" placeholder="Golden patterns">${escHtml((t.golden_patterns || []).join('\n'))}</textarea>
@@ -251,7 +242,6 @@ async function _updateTemplate(id) {
     delta_prefix: document.getElementById('tmpl-delta-prefix').value,
     delta_suffix: document.getElementById('tmpl-delta-suffix').value,
     actual_suffix: document.getElementById('tmpl-actual-suffix').value,
-    result_source: document.getElementById('tmpl-result-source').value,
   });
   document.getElementById('create-template-form').style.display = 'none';
   await _loadHome();
@@ -390,11 +380,6 @@ function _renderProfileEditor(projectId, index, pr) {
         ${_inlineField(projectId, index, pr, tmpl, 'Delta prefix', 'delta_prefix', pr.delta_prefix !== undefined ? pr.delta_prefix : 'delta-', 'delta-', 'style="width:100px"')}
         ${_inlineField(projectId, index, pr, tmpl, 'Delta suffix', 'delta_suffix', pr.delta_suffix || '', '', 'style="width:100px"')}
         ${_inlineField(projectId, index, pr, tmpl, 'Actual suffix', 'actual_suffix', pr.actual_suffix || '', '', 'style="width:100px"')}
-        <label>Result source</label>
-        <select class="input input-sm" style="width:120px" onchange="_editingProfiles['${projectId}'][${index}].result_source=this.value">
-          <option value="junit" ${(pr.result_source || 'junit') === 'junit' ? 'selected' : ''}>JUnit XML</option>
-          <option value="files" ${pr.result_source === 'files' ? 'selected' : ''}>Files only</option>
-        </select>
       </div>
       <div class="profile-editor-row ${gpModified ? 'profile-field-modified' : ''}" id="${gpFid}-row">
         <label>Golden patterns (one per line, use {name})</label>
@@ -515,7 +500,6 @@ async function _addProfileFromTemplate(projectId) {
       delta_prefix: t.delta_prefix !== undefined ? t.delta_prefix : 'delta-',
       delta_suffix: t.delta_suffix || '',
       actual_suffix: t.actual_suffix || '',
-      result_source: t.result_source || 'junit',
       template_id: t.id,
     });
     _renderProfilesList(projectId);
@@ -526,7 +510,7 @@ function _addCustomProfile(projectId) {
   _editingProfiles[projectId] = _editingProfiles[projectId] || [];
   _editingProfiles[projectId].push({
     name: '', failures_dir: '', golden_patterns: [],
-    delta_prefix: 'delta-', delta_suffix: '', actual_suffix: '', result_source: 'junit',
+    delta_prefix: 'delta-', delta_suffix: '', actual_suffix: '',
   });
   _profileEditing = _editingProfiles[projectId].length - 1;
   _renderProfilesList(projectId);

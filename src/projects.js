@@ -69,16 +69,7 @@ function defaultProfiles() {
 // --- Projects ---
 
 function listProjects() {
-  const projects = readJson(projectsPath()) || [];
-  let migrated = false;
-  for (const p of projects) {
-    if (!p.profiles) {
-      p.profiles = JSON.parse(JSON.stringify(defaultProfiles()));
-      migrated = true;
-    }
-  }
-  if (migrated) writeJson(projectsPath(), projects);
-  return projects;
+  return readJson(projectsPath()) || [];
 }
 
 function addProject(name, projectPath, templateIds) {

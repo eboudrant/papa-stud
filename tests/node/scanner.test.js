@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { detectCurrentFailures, deltaToBase, resolveGolden, processSingleModule, scanProject, discoverGradleModules } = require('../../src/scanner');
+const { detectCurrentFailures, deltaToBase, resolveGolden, processSingleModule, scanProject } = require('../../src/scanner');
+const { discoverModules: discoverGradleModules } = require('../../src/strategies/gradle');
 const { listTemplates, getTemplate, templateToProfile } = require('../../src/templates');
 
 function makePng(filePath, width = 10, height = 10) {
@@ -467,7 +468,6 @@ describe('compose screenshot mode', () => {
       delta_prefix: '',
       delta_suffix: '',
       actual_suffix: '',
-      result_source: 'files',
     };
   }
 

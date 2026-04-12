@@ -187,7 +187,7 @@ function createRouter() {
     const project = projects.getProject(req.params.id);
     if (!project) return res.status(404).json({ error: 'project not found' });
     const jobId = scanJobs.startScan(
-      req.params.id, project.name, project.path, project.profiles
+      req.params.id, project.name, project.path, project.profiles, project.strategy
     );
     res.status(202).json({ jobId });
   });

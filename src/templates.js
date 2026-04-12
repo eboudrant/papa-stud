@@ -23,7 +23,7 @@ const BUILTIN_TEMPLATES = [
     delta_prefix: 'delta-',
     delta_suffix: '',
     actual_suffix: '',
-    result_source: 'junit',
+    strategy: 'gradle',
   },
   {
     id: 'roborazzi',
@@ -37,7 +37,7 @@ const BUILTIN_TEMPLATES = [
     delta_prefix: '',
     delta_suffix: '_compare',
     actual_suffix: '_actual',
-    result_source: 'junit',
+    strategy: 'gradle',
   },
   {
     id: 'compose-screenshot',
@@ -51,7 +51,7 @@ const BUILTIN_TEMPLATES = [
     delta_prefix: '',
     delta_suffix: '',
     actual_suffix: '',
-    result_source: 'junit',
+    strategy: 'gradle',
   },
 ];
 
@@ -98,7 +98,7 @@ function createTemplate(data) {
     delta_prefix: data.delta_prefix !== undefined ? data.delta_prefix : 'delta-',
     delta_suffix: data.delta_suffix || '',
     actual_suffix: data.actual_suffix || '',
-    result_source: data.result_source || 'junit',
+    strategy: data.strategy || 'gradle',
   };
   filtered.push(template);
   writeCustom(filtered);
@@ -123,7 +123,7 @@ function templateToProfile(template) {
     delta_prefix: template.delta_prefix !== undefined ? template.delta_prefix : 'delta-',
     delta_suffix: template.delta_suffix || '',
     actual_suffix: template.actual_suffix || '',
-    result_source: template.result_source || 'junit',
+    strategy: template.strategy || 'gradle',
     template_id: template.id || '',
   };
   return profile;

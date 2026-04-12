@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const projects = require('../src/projects');
 const { createApp } = require('../src/handler');
+const { migrateDataFiles } = require('../src/dataMigration');
 
 let mainWindow;
 let server;
@@ -38,6 +39,7 @@ function setupLogging() {
 
 function startServer() {
   const dataDir = path.join(app.getPath('userData'), 'data');
+  migrateDataFiles(dataDir);
   projects.setDataDir(dataDir);
 
   return new Promise((resolve, reject) => {

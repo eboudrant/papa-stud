@@ -8,6 +8,7 @@ const path = require('path');
 const projects = require('./projects');
 const { scanProjectIncrementalSync, processSingleModule } = require('./scanner');
 const { createWatcher } = require('./watcher');
+const { getStrategy } = require('./strategies');
 
 const DEBUG = process.env.PAPASTUD_DEBUG === '1';
 const log = (...args) => { if (DEBUG) console.log(...args); };
@@ -16,9 +17,9 @@ const jobs = new Map();
 const watchers = new Map(); // scanId -> watcher
 const JOB_TTL = 300_000; // 5 minutes in ms
 
-function startScan(projectId, name, projectPath, profiles) {
+function startScan(projectId, name, projectPath, profiles, strategyName) {
   cleanupOldJobs();
-  log(`[scan] starting scan for "${name}" at ${projectPath} (${profiles?.length || 0} profiles)`);
+  log(`[scan] starting scan for "${name}" at ${projectPath} (${profiles?.length || 0} profiles, strategy: ${strategyName || 'gradle'})`);
   const jobId = crypto.randomBytes(4).toString('hex');
   let cancelled = false;
   const job = {
@@ -40,7 +41,7 @@ function startScan(projectId, name, projectPath, profiles) {
   jobs.set(jobId, job);
 
   // Run scan asynchronously via setImmediate chunks
-  setImmediate(() => runScan(jobId, projectId, name, projectPath, profiles));
+  setImmediate(() => runScan(jobId, projectId, name, projectPath, profiles, strategyName));
   return jobId;
 }
 
@@ -81,10 +82,10 @@ function cleanupOldJobs() {
 // Periodic cleanup so completed jobs don't accumulate in long-running servers
 setInterval(cleanupOldJobs, JOB_TTL).unref();
 
-function runScan(jobId, projectId, name, projectPath, profiles) {
+function runScan(jobId, projectId, name, projectPath, profiles, strategyName) {
   const job = jobs.get(jobId);
   if (!job) return;
-  const gen = scanProjectIncrementalSync(projectPath, job._cancelFn, profiles);
+  const gen = scanProjectIncrementalSync(projectPath, job._cancelFn, profiles, strategyName);
   const processNext = () => {
     try {
       const { value, done } = gen.next();
@@ -139,11 +140,13 @@ function startWatching(scanId) {
   const projectPath = scan.projectPath || '';
   const project = projects.getProject(scan.projectId || '');
   const scanProfiles = project ? project.profiles : null;
+  const strategyName = project?.strategy || 'gradle';
+  const strategy = getStrategy(strategyName);
 
   const onModuleChange = (moduleName, modulePath) => {
     log(`[watch] rescanning module ${moduleName} at ${modulePath}`);
     const [moduleData, moduleFailures] = processSingleModule(
-      null, moduleName, modulePath, scanProfiles
+      null, moduleName, modulePath, scanProfiles, strategyName
     );
     log(`[watch] module ${moduleName}: ${moduleFailures.length} failures (profiles: ${Object.entries(moduleData.profile_counts).map(([k,v]) => `${k}=${v}`).join(', ')})`);
     projects.updateScanModule(scanId, moduleName, moduleData, moduleFailures);
@@ -152,15 +155,12 @@ function startWatching(scanId) {
   // Rescan all modules immediately to pick up any changes since last scan
   log(`[watch] start watching scan ${scanId} — rescanning ${(scan.modules || []).length} modules`);
   for (const mod of scan.modules || []) {
-    const parts = mod.name.replace(/^:/, '').split(':');
-    const modulePath = parts[0] !== 'root'
-      ? path.join(projectPath, ...parts)
-      : projectPath;
+    const modulePath = strategy.resolveModulePath(mod.name, projectPath);
     onModuleChange(mod.name, modulePath);
   }
   log(`[watch] initial rescan complete, starting file watcher`);
 
-  const watcher = createWatcher(scan.modules, projectPath, onModuleChange, scanProfiles);
+  const watcher = createWatcher(scan.modules, projectPath, onModuleChange, scanProfiles, strategy);
   watcher.start();
   watchers.set(scanId, watcher);
   return true;
