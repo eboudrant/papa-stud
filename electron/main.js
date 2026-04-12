@@ -53,12 +53,14 @@ function startServer() {
 // --- Window ---
 
 function createWindow() {
+  const savedTheme = readTheme();
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     title: 'Papa Stud.io',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 13 },
+    backgroundColor: themeBgColor(savedTheme),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -154,6 +156,30 @@ function buildMenu() {
 }
 
 // --- Lifecycle ---
+
+// --- Theme persistence ---
+
+function themeFilePath() { return path.join(app.getPath('userData'), 'theme.json'); }
+
+function readTheme() {
+  try { return JSON.parse(fs.readFileSync(themeFilePath(), 'utf8')).theme || 'system'; }
+  catch { return 'system'; }
+}
+
+function writeTheme(value) {
+  fs.writeFileSync(themeFilePath(), JSON.stringify({ theme: value }));
+}
+
+function themeBgColor(theme) {
+  if (theme === 'dark') return '#121212';
+  if (theme === 'light') return '#f5f5f0';
+  // System: check nativeTheme
+  const { nativeTheme } = require('electron');
+  return nativeTheme.shouldUseDarkColors ? '#121212' : '#f5f5f0';
+}
+
+ipcMain.handle('get-theme', () => readTheme());
+ipcMain.on('set-theme', (_, value) => writeTheme(value));
 
 ipcMain.on('toggle-maximize', () => {
   if (!mainWindow) return;
