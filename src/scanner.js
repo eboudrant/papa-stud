@@ -43,7 +43,7 @@ function* scanProjectIncrementalSync(projectPath, cancelFn, profiles) {
   const root = projectPath;
 
   const discovered = [];
-  for (const moduleInfo of discoverPaparazziModules(root, profiles)) {
+  for (const moduleInfo of discoverGradleModules(root, profiles)) {
     discovered.push(moduleInfo);
     yield ['discovering', { found: discovered.length, current_dir: moduleInfo[1] }];
   }
@@ -255,7 +255,7 @@ function deltaToBase(filename, deltaPrefix, deltaSuffix) {
   return name;
 }
 
-function* discoverPaparazziModules(root) {
+function* discoverGradleModules(root) {
   yield* walkWithPruning(root, root);
 }
 
@@ -377,7 +377,7 @@ module.exports = {
   scanProject,
   scanProjectIncrementalSync,
   processSingleModule,
-  discoverPaparazziModules,
+  discoverGradleModules,
   deltaToBase,
   resolveGolden,
   detectCurrentFailures,

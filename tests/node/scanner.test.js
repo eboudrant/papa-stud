@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { detectCurrentFailures, deltaToBase, resolveGolden, processSingleModule, scanProject } = require('../../src/scanner');
+const { detectCurrentFailures, deltaToBase, resolveGolden, processSingleModule, scanProject, discoverGradleModules } = require('../../src/scanner');
 const { listTemplates, getTemplate, templateToProfile } = require('../../src/templates');
 
 function makePng(filePath, width = 10, height = 10) {
@@ -323,5 +323,180 @@ describe('templates', () => {
     assert.equal(p.delta_suffix, '_compare');
     assert.equal(p.actual_suffix, '_actual');
     assert.equal(p.template_id, 'roborazzi');
+  });
+});
+
+describe('discoverGradleModules', () => {
+  it('discovers paparazzi module with failures dir', () => {
+    const root = tmpdir;
+    const failDir = path.join(root, 'app', 'build', 'paparazzi', 'failures');
+    fs.mkdirSync(failDir, { recursive: true });
+
+    const modules = [...discoverGradleModules(root)];
+    assert.equal(modules.length, 1);
+    assert.equal(modules[0][1], ':app'); // moduleName
+    assert.equal(modules[0][2], path.join(root, 'app')); // modulePath
+    assert.equal(modules[0][0], failDir); // failuresDir
+  });
+
+  it('discovers roborazzi module', () => {
+    const root = tmpdir;
+    fs.mkdirSync(path.join(root, 'lib', 'build', 'outputs', 'roborazzi'), { recursive: true });
+
+    const modules = [...discoverGradleModules(root)];
+    assert.equal(modules.length, 1);
+    assert.equal(modules[0][1], ':lib');
+  });
+
+  it('discovers compose screenshot module', () => {
+    const root = tmpdir;
+    fs.mkdirSync(path.join(root, 'ui', 'build', 'outputs', 'screenshotTest-results'), { recursive: true });
+
+    const modules = [...discoverGradleModules(root)];
+    assert.equal(modules.length, 1);
+    assert.equal(modules[0][1], ':ui');
+    assert.equal(modules[0][0], null); // no failuresDir for compose
+  });
+
+  it('discovers nested modules', () => {
+    const root = tmpdir;
+    fs.mkdirSync(path.join(root, 'libraries', 'ui', 'login', 'build', 'paparazzi', 'failures'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'libraries', 'ui', 'settings', 'build', 'paparazzi', 'failures'), { recursive: true });
+
+    const modules = [...discoverGradleModules(root)];
+    const names = modules.map(m => m[1]).sort();
+    assert.equal(names.length, 2);
+    assert.equal(names[0], ':libraries:ui:login');
+    assert.equal(names[1], ':libraries:ui:settings');
+  });
+
+  it('discovers multiple tool types in same project', () => {
+    const root = tmpdir;
+    fs.mkdirSync(path.join(root, 'app', 'build', 'paparazzi', 'failures'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'lib', 'build', 'outputs', 'roborazzi'), { recursive: true });
+
+    const modules = [...discoverGradleModules(root)];
+    assert.equal(modules.length, 2);
+    const names = new Set(modules.map(m => m[1]));
+    assert.ok(names.has(':app'));
+    assert.ok(names.has(':lib'));
+  });
+
+  it('prunes .git and node_modules', () => {
+    const root = tmpdir;
+    fs.mkdirSync(path.join(root, '.git', 'build', 'paparazzi', 'failures'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'node_modules', 'build', 'paparazzi', 'failures'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'app', 'build', 'paparazzi', 'failures'), { recursive: true });
+
+    const modules = [...discoverGradleModules(root)];
+    assert.equal(modules.length, 1);
+    assert.equal(modules[0][1], ':app');
+  });
+
+  it('paparazzi without failures subdir yields null failuresDir', () => {
+    const root = tmpdir;
+    fs.mkdirSync(path.join(root, 'app', 'build', 'paparazzi'), { recursive: true });
+    // No 'failures' subdirectory
+
+    const modules = [...discoverGradleModules(root)];
+    assert.equal(modules.length, 1);
+    assert.equal(modules[0][0], null); // failuresDir is null
+  });
+
+  it('empty project yields no modules', () => {
+    const modules = [...discoverGradleModules(tmpdir)];
+    assert.equal(modules.length, 0);
+  });
+});
+
+describe('detectCurrentFailures edge cases', () => {
+  it('suffix-based delta detection', () => {
+    makePng(path.join(tmpdir, 'test_compare.png'));
+    makePng(path.join(tmpdir, 'test.png')); // not a delta
+
+    const result = detectCurrentFailures(tmpdir, '', '_compare');
+    assert.equal(result.length, 1);
+    assert.ok(result[0].includes('test_compare.png'));
+  });
+
+  it('no delta convention recurses subdirs', () => {
+    fs.mkdirSync(path.join(tmpdir, 'subpkg'), { recursive: true });
+    makePng(path.join(tmpdir, 'top.png'));
+    makePng(path.join(tmpdir, 'subpkg', 'nested.png'));
+
+    const result = detectCurrentFailures(tmpdir, '', '');
+    assert.equal(result.length, 2);
+  });
+
+  it('nonexistent dir returns empty', () => {
+    const result = detectCurrentFailures(path.join(tmpdir, 'nope'));
+    assert.deepEqual(result, []);
+  });
+
+  it('mtime cluster groups within tolerance', () => {
+    makePng(path.join(tmpdir, 'delta-a.png'));
+    makePng(path.join(tmpdir, 'delta-b.png'));
+    // Set b to 30 seconds older than now (within 60s tolerance)
+    const bPath = path.join(tmpdir, 'delta-b.png');
+    const t = new Date(Date.now() - 30000);
+    fs.utimesSync(bPath, t, t);
+
+    const result = detectCurrentFailures(tmpdir);
+    assert.equal(result.length, 2);
+  });
+
+  it('mtime cluster excludes beyond tolerance', () => {
+    makePng(path.join(tmpdir, 'delta-new.png'));
+    const oldPath = path.join(tmpdir, 'delta-old.png');
+    makePng(oldPath);
+    fs.utimesSync(oldPath, new Date(1000000000), new Date(1000000000));
+
+    const result = detectCurrentFailures(tmpdir);
+    assert.equal(result.length, 1);
+    assert.ok(result[0].includes('delta-new.png'));
+  });
+});
+
+describe('compose screenshot mode', () => {
+  function composeProfile() {
+    return {
+      name: 'Compose',
+      failures_dir: 'build/outputs/screenshotTest-results/preview/debug/rendered',
+      golden_dir: 'src/screenshotTestDebug/reference',
+      golden_patterns: ['src/screenshotTestDebug/reference/{name}.png'],
+      delta_prefix: '',
+      delta_suffix: '',
+      actual_suffix: '',
+      result_source: 'files',
+    };
+  }
+
+  it('no prefix no suffix compares files by content', () => {
+    const root = tmpdir;
+    const failDir = path.join(root, 'mod', 'build', 'outputs', 'screenshotTest-results', 'preview', 'debug', 'rendered');
+    const goldenDir = path.join(root, 'mod', 'src', 'screenshotTestDebug', 'reference');
+    fs.mkdirSync(failDir, { recursive: true });
+    fs.mkdirSync(goldenDir, { recursive: true });
+
+    makePng(path.join(failDir, 'TestClass_method.png'), 10, 10);
+    makePng(path.join(goldenDir, 'TestClass_method.png'), 20, 20);
+
+    const [, failures] = processSingleModule(null, ':mod', path.join(root, 'mod'), [composeProfile()]);
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].filename, 'TestClass_method.png');
+  });
+
+  it('identical files are not failures', () => {
+    const root = tmpdir;
+    const failDir = path.join(root, 'mod', 'build', 'outputs', 'screenshotTest-results', 'preview', 'debug', 'rendered');
+    const goldenDir = path.join(root, 'mod', 'src', 'screenshotTestDebug', 'reference');
+    fs.mkdirSync(failDir, { recursive: true });
+    fs.mkdirSync(goldenDir, { recursive: true });
+
+    makePng(path.join(failDir, 'TestClass_method.png'), 10, 10);
+    makePng(path.join(goldenDir, 'TestClass_method.png'), 10, 10);
+
+    const [, failures] = processSingleModule(null, ':mod', path.join(root, 'mod'), [composeProfile()]);
+    assert.equal(failures.length, 0);
   });
 });
