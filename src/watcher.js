@@ -92,9 +92,9 @@ class ChokidarWatcher {
 
   _discoverNewModules() {
     // Lazy import to avoid circular dependency
-    const { discoverPaparazziModules } = require('./scanner');
+    const { discoverGradleModules } = require('./scanner');
     try {
-      for (const [, moduleName, modulePath] of discoverPaparazziModules(this._root, this._profiles)) {
+      for (const [, moduleName, modulePath] of discoverGradleModules(this._root, this._profiles)) {
         if (!this._knownModules.has(moduleName)) {
           if (this._addModuleWatches(moduleName)) {
             // Add new dirs to existing chokidar watcher
