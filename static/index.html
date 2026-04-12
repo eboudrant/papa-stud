@@ -18,28 +18,40 @@
 
   <script>
     // Theme: system | light | dark
+    // In Electron, persist via IPC (survives port changes). In browser, use localStorage.
     function _getSystemTheme() {
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
+    function _getThemePref() {
+      return localStorage.getItem('papastud_theme') || 'system';
+    }
     function _applyTheme() {
-      const pref = localStorage.getItem('papastud_theme') || 'system';
+      const pref = _getThemePref();
       const resolved = pref === 'system' ? _getSystemTheme() : pref;
       document.documentElement.setAttribute('data-theme', resolved);
     }
     function _setTheme(value) {
       localStorage.setItem('papastud_theme', value);
+      if (window.electronAPI) window.electronAPI.setTheme(value);
       _applyTheme();
     }
     function _toggleTheme() {
-      const pref = localStorage.getItem('papastud_theme') || 'system';
+      const pref = _getThemePref();
       const order = ['system', 'light', 'dark'];
       const next = order[(order.indexOf(pref) + 1) % order.length];
       _setTheme(next);
     }
+    // On Electron startup, sync from persisted theme
+    if (window.electronAPI) {
+      window.electronAPI.getTheme().then(t => {
+        localStorage.setItem('papastud_theme', t);
+        _applyTheme();
+      });
+    }
     _applyTheme();
     // Follow OS changes when set to system
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if ((localStorage.getItem('papastud_theme') || 'system') === 'system') _applyTheme();
+      if (_getThemePref() === 'system') _applyTheme();
     });
     // Ctrl+Shift+L to toggle theme
     document.addEventListener('keydown', function(e) {
