@@ -77,8 +77,8 @@ header {
   top: 0;
   z-index: 100;
 }
-.electron header { padding-left: 80px; -webkit-app-region: drag; }
-.electron header * { -webkit-app-region: no-drag; }
+.electron header { padding-left: 80px; -webkit-app-region: drag; user-select: none; }
+.electron header button, .electron header .btn-icon { -webkit-app-region: no-drag; }
 .electron header h1 { font-size: 13px; }
 header a { text-decoration: none; color: inherit; }
 .header-brand { display: flex; align-items: center; gap: 12px; }
