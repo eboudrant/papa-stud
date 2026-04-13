@@ -33,7 +33,8 @@ function showReview(scanId) {
           </select>
           <div class="toolbar-actions">
             <button class="btn btn-sm" id="export-video-btn" onclick="_exportVideo('${scanId}')">Export Video</button>
-            <button class="btn btn-sm watch-btn" id="watch-toggle" onclick="_toggleWatch('${scanId}')">Watch</button>
+            <button class="btn btn-sm" onclick="_rescanFromReview('${escAttr(scanId)}')">Re-scan</button>
+            <!-- TODO: re-enable Watch with polling-based approach (chokidar EMFILE on large projects) -->
             <span id="review-counter" class="counter"></span>
           </div>
         </div>
@@ -358,6 +359,27 @@ async function _exportVideo(scanId) {
   }
 }
 
+
+// --- Re-scan ---
+
+async function _rescanFromReview(scanId) {
+  const scan = await apiGet(`/api/scans/${scanId}?page=0&size=0`);
+  if (!scan) return;
+  const btn = document.querySelector('[onclick*="rescanFromReview"]');
+  if (btn) { btn.textContent = 'Scanning...'; btn.disabled = true; }
+  const resp = await apiPost(`/api/projects/${scan.projectId}/scan`, {});
+  if (resp?.jobId) {
+    // Poll until complete then navigate to the new scan
+    const poll = setInterval(async () => {
+      const job = await apiGet(`/api/scan-jobs/${resp.jobId}`);
+      if (!job || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+        clearInterval(poll);
+        if (job?.scanId) navigate(`/scans/${job.scanId}`);
+        else _resetAndReload();
+      }
+    }, 1500);
+  }
+}
 
 // --- Watch mode ---
 
