@@ -1,9 +1,9 @@
 /**
- * Scan Gradle projects for Paparazzi/Roborazzi screenshot failures.
+ * Scan a project for screenshot test failures.
  *
- * Finds modules with build/paparazzi/ or build/outputs/roborazzi/,
- * detects current vs stale failures using mtime clustering,
- * matches golden images, and parses JUnit XML for test statistics.
+ * Module discovery and watch dirs are delegated to the strategy (e.g., gradle).
+ * Detects current vs stale failures using mtime clustering,
+ * matches golden images, and (for strategies that support JUnit) parses XML.
  */
 
 const fs = require('fs');
@@ -17,33 +17,22 @@ const log = (...args) => { if (DEBUG) console.log(...args); };
 
 const MTIME_CLUSTER_TOLERANCE = 60.0;
 
-const BUILD_ALLOWED = new Set(['paparazzi', 'test-results', 'outputs']);
-const OUTPUT_ALLOWED = new Set(['roborazzi', 'screenshotTest-results']);
+const { getStrategy } = require('./strategies');
 
-function deriveModule(relParts, buildIdx, root) {
-  const moduleParts = relParts.slice(0, buildIdx);
-  const moduleName = moduleParts.length ? ':' + moduleParts.join(':') : ':root';
-  const modulePath = moduleParts.length ? path.join(root, ...moduleParts) : root;
-  return [moduleName, modulePath];
-}
-
-const PRUNE_DIRS = new Set([
-  '.git', '.gradle', '.idea', 'node_modules', '.cxx', '.transforms', 'src', '.kotlin',
-]);
-
-function scanProject(projectPath) {
+function scanProject(projectPath, strategyName) {
   const result = { modules: [], failures: [] };
-  for (const [phase, data] of scanProjectIncrementalSync(projectPath)) {
+  for (const [phase, data] of scanProjectIncrementalSync(projectPath, null, null, strategyName)) {
     if (phase === 'complete') return data;
   }
   return result;
 }
 
-function* scanProjectIncrementalSync(projectPath, cancelFn, profiles) {
+function* scanProjectIncrementalSync(projectPath, cancelFn, profiles, strategyName) {
   const root = projectPath;
+  const strategy = getStrategy(strategyName);
 
   const discovered = [];
-  for (const moduleInfo of discoverGradleModules(root, profiles)) {
+  for (const moduleInfo of strategy.discoverModules(root)) {
     discovered.push(moduleInfo);
     yield ['discovering', { found: discovered.length, current_dir: moduleInfo[1] }];
   }
@@ -58,7 +47,7 @@ function* scanProjectIncrementalSync(projectPath, cancelFn, profiles) {
     }
 
     const [failuresDir, moduleName, modulePath] = discovered[i];
-    const [moduleData, moduleFailures] = processSingleModule(failuresDir, moduleName, modulePath, profiles);
+    const [moduleData, moduleFailures] = processSingleModule(failuresDir, moduleName, modulePath, profiles, strategyName);
     modules.push(moduleData);
     if (moduleFailures.length) failures.push(...moduleFailures);
 
@@ -72,10 +61,11 @@ function* scanProjectIncrementalSync(projectPath, cancelFn, profiles) {
   yield ['complete', { modules, failures }];
 }
 
-function processSingleModule(failuresDir, moduleName, modulePath, profiles) {
-  const needsJunit = !profiles || !profiles.length || profiles.some(p => (p.result_source || 'junit') === 'junit');
-  const [testStats, xmlMtime] = needsJunit ? parseJunitXml(modulePath) : [null, 0];
-  const diffPcts = needsJunit ? parseDiffPercentages(modulePath) : {};
+function processSingleModule(failuresDir, moduleName, modulePath, profiles, strategyName) {
+  const strategy = getStrategy(strategyName);
+  const useJunit = strategy.usesJunit !== false;
+  const [testStats, xmlMtime] = useJunit ? parseJunitXml(modulePath) : [null, 0];
+  const diffPcts = useJunit ? parseDiffPercentages(modulePath) : {};
   const moduleFailures = [];
   const profileCounts = {};
   let totalSnapshots = 0;
@@ -85,10 +75,9 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles) {
       const pname = profile.name;
       const fDir = path.join(modulePath, profile.failures_dir);
       const gp = buildGoldenPatterns(profile);
-      const useJunit = (profile.result_source || 'junit') === 'junit';
       const pf = processProfile(
         fDir, modulePath, moduleName, pname,
-        useJunit ? testStats : null, useJunit ? xmlMtime : 0, gp, useJunit ? diffPcts : {},
+        testStats, xmlMtime, gp, diffPcts,
         profile.delta_prefix !== undefined ? profile.delta_prefix : 'delta-',
         profile.delta_suffix || '',
         profile.actual_suffix || '',
@@ -144,7 +133,7 @@ function resolveGolden(modulePath, goldenPatterns, snapshotName) {
       if (matches.length) return matches[0];
     } else {
       const candidate = path.join(modulePath, resolved);
-      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+      try { if (fs.statSync(candidate).isFile()) return candidate; } catch {}
     }
   }
   return null;
@@ -156,9 +145,8 @@ function processProfile(
   deltaPrefix = 'delta-', deltaSuffix = '', actualSuffix = '',
 ) {
   const results = [];
-  if (!failuresDir || !fs.existsSync(failuresDir) || !fs.statSync(failuresDir).isDirectory()) {
-    return results;
-  }
+  if (!failuresDir) return results;
+  try { if (!fs.statSync(failuresDir).isDirectory()) return results; } catch { return results; }
 
   let current = detectCurrentFailures(failuresDir, deltaPrefix, deltaSuffix);
   log(`[scan] ${profileName} in ${failuresDir}: ${current.length} candidates, xmlMtime=${xmlMtime}, testStats.failed=${testStats?.failed}`);
@@ -173,10 +161,11 @@ function processProfile(
     if (current.length < before) log(`[scan] filtered ${before - current.length} stale deltas (older than xmlMtime ${xmlMtime})`);
   }
 
-  const goldenCache = {};
+  const goldenCache = new Map();
   for (const f of current) {
     const base = deltaToBase(path.basename(f), deltaPrefix, deltaSuffix);
-    goldenCache[path.basename(f)] = resolveGolden(modulePath, goldenPatterns, base);
+    // Key by full path so subdirs with same basename don't collide in compare mode
+    goldenCache.set(f, resolveGolden(modulePath, goldenPatterns, base));
   }
 
   const noDeltaConvention = !deltaPrefix && !deltaSuffix;
@@ -184,7 +173,7 @@ function processProfile(
   for (const candidatePath of current) {
     const base = deltaToBase(path.basename(candidatePath), deltaPrefix, deltaSuffix);
     const parsed = parseFilename(base);
-    const goldenPath = goldenCache[path.basename(candidatePath)];
+    const goldenPath = goldenCache.get(candidatePath);
 
     let actualPath, deltaFilePath;
     if (noDeltaConvention) {
@@ -255,61 +244,6 @@ function deltaToBase(filename, deltaPrefix, deltaSuffix) {
   return name;
 }
 
-function* discoverGradleModules(root) {
-  yield* walkWithPruning(root, root);
-}
-
-function* walkWithPruning(dir, root, relParts = []) {
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  const subdirs = entries.filter(e => e.isDirectory()).map(e => e.name);
-  const pruned = subdirs.filter(d => !PRUNE_DIRS.has(d));
-
-  if (relParts.includes('build')) {
-    const idx = relParts.indexOf('build');
-    const depth = relParts.length - idx;
-
-    if (depth === 1) {
-      for (const d of pruned.filter(d => BUILD_ALLOWED.has(d))) {
-        yield* walkWithPruning(path.join(dir, d), root, [...relParts, d]);
-      }
-    } else if (depth === 2 && relParts[relParts.length - 1] === 'outputs') {
-      for (const d of pruned.filter(d => OUTPUT_ALLOWED.has(d))) {
-        yield* walkWithPruning(path.join(dir, d), root, [...relParts, d]);
-      }
-    } else if (depth === 3 && relParts[idx + 1] === 'outputs' && relParts[idx + 2] === 'screenshotTest-results') {
-      const [moduleName, modulePath] = deriveModule(relParts, idx, root);
-      yield [null, moduleName, modulePath];
-    } else if (depth === 3 && relParts[idx + 1] === 'outputs' && relParts[idx + 2] === 'roborazzi') {
-      const [moduleName, modulePath] = deriveModule(relParts, idx, root);
-      yield [dir, moduleName, modulePath];
-    } else if (depth === 2 && relParts[relParts.length - 1] === 'paparazzi') {
-      const [moduleName, modulePath] = deriveModule(relParts, idx, root);
-      const failuresDir = path.join(dir, 'failures');
-      try {
-        const fStat = fs.statSync(failuresDir);
-        yield [fStat.isDirectory() ? failuresDir : null, moduleName, modulePath];
-      } catch {
-        yield [null, moduleName, modulePath];
-      }
-    } else if (depth === 2 && relParts[relParts.length - 1] === 'test-results') {
-      // Allow traversal for JUnit XML discovery but don't yield modules
-    } else {
-      return; // Stop deeper traversal
-    }
-    return;
-  }
-
-  for (const d of pruned) {
-    yield* walkWithPruning(path.join(dir, d), root, [...relParts, d]);
-  }
-}
-
 function detectCurrentFailures(failuresDir, deltaPrefix = 'delta-', deltaSuffix = '') {
   const deltaFiles = [];
   const noDeltaConvention = !deltaPrefix && !deltaSuffix;
@@ -377,7 +311,6 @@ module.exports = {
   scanProject,
   scanProjectIncrementalSync,
   processSingleModule,
-  discoverGradleModules,
   deltaToBase,
   resolveGolden,
   detectCurrentFailures,

@@ -3,7 +3,12 @@
  * Node.js entry point. Run with: node src/server.js
  */
 
+const path = require('path');
 const { createApp } = require('./handler');
+const { migrateDataFiles } = require('./dataMigration');
+
+const dataDir = path.join(process.cwd(), 'data');
+migrateDataFiles(dataDir);
 
 const port = parseInt(process.env.PORT || '8770', 10);
 

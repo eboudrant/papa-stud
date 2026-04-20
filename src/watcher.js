@@ -11,18 +11,19 @@ const chokidar = require('chokidar');
 const DISCOVERY_INTERVAL = 5000; // ms
 const DEBOUNCE_DELAY = 500; // ms
 
-function createWatcher(modules, projectPath, onModuleChange, profiles) {
-  return new ChokidarWatcher(modules, projectPath, onModuleChange, profiles);
+function createWatcher(modules, projectPath, onModuleChange, profiles, strategy) {
+  return new ChokidarWatcher(modules, projectPath, onModuleChange, profiles, strategy);
 }
 
 class ChokidarWatcher {
-  constructor(modules, projectPath, onModuleChange, profiles) {
+  constructor(modules, projectPath, onModuleChange, profiles, strategy) {
     this._onChange = onModuleChange;
     this._timers = new Map();
     this._pathToModule = new Map();
     this._actualWatchDirs = new Set();
     this._root = projectPath;
     this._profiles = profiles;
+    this._strategy = strategy;
     this._knownModules = new Set();
     this._discoveryTimer = null;
     this._chokidarWatcher = null;
@@ -36,25 +37,14 @@ class ChokidarWatcher {
     if (this._knownModules.has(moduleName)) return false;
     this._knownModules.add(moduleName);
 
-    const parts = moduleName.replace(/^:/, '').split(':');
-    const modulePath = parts[0] !== 'root' ? path.join(this._root, ...parts) : this._root;
-
-    const wantDirs = new Set();
-    wantDirs.add(path.join(modulePath, 'build', 'paparazzi'));
-    wantDirs.add(path.join(modulePath, 'build', 'test-results'));
-    if (this._profiles) {
-      for (const p of this._profiles) {
-        wantDirs.add(path.join(modulePath, p.failures_dir));
-        if (p.golden_dir) wantDirs.add(path.join(modulePath, p.golden_dir));
-      }
-    } else {
-      wantDirs.add(path.join(modulePath, 'src', 'test', 'snapshots', 'images'));
-    }
+    const modulePath = this._strategy.resolveModulePath(moduleName, this._root);
+    const wantDirs = this._strategy.getWatchDirs(modulePath, this._profiles);
 
     let added = false;
     for (const d of wantDirs) {
       let target = d;
-      while (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
+      while (true) {
+        try { if (fs.statSync(target).isDirectory()) break; } catch {}
         const parent = path.dirname(target);
         if (parent === this._root || parent === target) { target = null; break; }
         target = parent;
@@ -91,13 +81,10 @@ class ChokidarWatcher {
   }
 
   _discoverNewModules() {
-    // Lazy import to avoid circular dependency
-    const { discoverGradleModules } = require('./scanner');
     try {
-      for (const [, moduleName, modulePath] of discoverGradleModules(this._root, this._profiles)) {
+      for (const [, moduleName, modulePath] of this._strategy.discoverModules(this._root)) {
         if (!this._knownModules.has(moduleName)) {
           if (this._addModuleWatches(moduleName)) {
-            // Add new dirs to existing chokidar watcher
             for (const d of this._actualWatchDirs) {
               this._chokidarWatcher.add(d);
             }
@@ -105,9 +92,7 @@ class ChokidarWatcher {
           this._onChange(moduleName, modulePath);
         }
       }
-    } catch {
-      // Discovery may fail if project structure changes during scan
-    }
+    } catch {}
   }
 
   start() {

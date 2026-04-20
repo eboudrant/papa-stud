@@ -172,7 +172,7 @@ function createRouter() {
     const body = req.body;
     if (!body || !body.path) return res.status(400).json({ error: 'path required' });
     const name = body.name || path.basename(body.path);
-    const project = projects.addProject(name, body.path, body.template_ids);
+    const project = projects.addProject(name, body.path, body.template_ids, body.strategy);
     res.status(201).json(project);
   });
 
@@ -187,7 +187,7 @@ function createRouter() {
     const project = projects.getProject(req.params.id);
     if (!project) return res.status(404).json({ error: 'project not found' });
     const jobId = scanJobs.startScan(
-      req.params.id, project.name, project.path, project.profiles
+      req.params.id, project.name, project.path, project.profiles, project.strategy
     );
     res.status(202).json({ jobId });
   });
