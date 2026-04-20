@@ -3,8 +3,8 @@
  * Built-in templates for Paparazzi and Roborazzi, plus user-defined custom templates.
  */
 
-const fs = require('fs');
 const path = require('path');
+const { readJson, writeJson } = require('./jsonStore');
 
 let DATA_DIR = path.join(process.cwd(), 'data');
 
@@ -23,7 +23,6 @@ const BUILTIN_TEMPLATES = [
     delta_prefix: 'delta-',
     delta_suffix: '',
     actual_suffix: '',
-    strategy: 'gradle',
   },
   {
     id: 'roborazzi',
@@ -37,7 +36,6 @@ const BUILTIN_TEMPLATES = [
     delta_prefix: '',
     delta_suffix: '_compare',
     actual_suffix: '_actual',
-    strategy: 'gradle',
   },
   {
     id: 'compose-screenshot',
@@ -51,7 +49,6 @@ const BUILTIN_TEMPLATES = [
     delta_prefix: '',
     delta_suffix: '',
     actual_suffix: '',
-    strategy: 'gradle',
   },
 ];
 
@@ -60,18 +57,11 @@ function customPath() {
 }
 
 function readCustom() {
-  const p = customPath();
-  if (fs.existsSync(p)) {
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-  }
-  return [];
+  return readJson(customPath()) || [];
 }
 
 function writeCustom(templates) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const tmp = customPath() + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(templates, null, 2));
-  fs.renameSync(tmp, customPath());
+  writeJson(customPath(), templates);
 }
 
 function listTemplates() {
@@ -98,7 +88,6 @@ function createTemplate(data) {
     delta_prefix: data.delta_prefix !== undefined ? data.delta_prefix : 'delta-',
     delta_suffix: data.delta_suffix || '',
     actual_suffix: data.actual_suffix || '',
-    strategy: data.strategy || 'gradle',
   };
   filtered.push(template);
   writeCustom(filtered);
@@ -123,7 +112,6 @@ function templateToProfile(template) {
     delta_prefix: template.delta_prefix !== undefined ? template.delta_prefix : 'delta-',
     delta_suffix: template.delta_suffix || '',
     actual_suffix: template.actual_suffix || '',
-    strategy: template.strategy || 'gradle',
     template_id: template.id || '',
   };
   return profile;

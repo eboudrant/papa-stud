@@ -43,7 +43,8 @@ class ChokidarWatcher {
     let added = false;
     for (const d of wantDirs) {
       let target = d;
-      while (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
+      while (true) {
+        try { if (fs.statSync(target).isDirectory()) break; } catch {}
         const parent = path.dirname(target);
         if (parent === this._root || parent === target) { target = null; break; }
         target = parent;

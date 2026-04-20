@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const templates = require('./templates');
+const { readJson, writeJson } = require('./jsonStore');
 
 let DATA_DIR = path.join(process.cwd(), 'data');
 
@@ -35,18 +36,6 @@ function sanitizeId(id) {
 function scanPath(scanId) { return path.join(scansDir(), `${sanitizeId(scanId)}.json`); }
 function indexPath() { return path.join(scansDir(), 'index.json'); }
 
-function readJson(p) {
-  if (!fs.existsSync(p)) return null;
-  return JSON.parse(fs.readFileSync(p, 'utf8'));
-}
-
-function writeJson(p, data) {
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = p + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, p);
-}
-
 // --- Default profiles ---
 
 let _defaultProfiles = null;
@@ -72,7 +61,7 @@ function listProjects() {
   return readJson(projectsPath()) || [];
 }
 
-function addProject(name, projectPath, templateIds) {
+function addProject(name, projectPath, templateIds, strategy) {
   let profiles;
   if (templateIds && templateIds.length) {
     profiles = [];
@@ -90,6 +79,7 @@ function addProject(name, projectPath, templateIds) {
     name,
     path: projectPath,
     added: new Date().toISOString(),
+    strategy: strategy || 'gradle',
     profiles,
   };
   projects.push(project);

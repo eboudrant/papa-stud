@@ -1,9 +1,9 @@
 /**
- * Scan Gradle projects for Paparazzi/Roborazzi screenshot failures.
+ * Scan a project for screenshot test failures.
  *
- * Finds modules with build/paparazzi/ or build/outputs/roborazzi/,
- * detects current vs stale failures using mtime clustering,
- * matches golden images, and parses JUnit XML for test statistics.
+ * Module discovery and watch dirs are delegated to the strategy (e.g., gradle).
+ * Detects current vs stale failures using mtime clustering,
+ * matches golden images, and (for strategies that support JUnit) parses XML.
  */
 
 const fs = require('fs');
@@ -77,7 +77,7 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles, stra
       const gp = buildGoldenPatterns(profile);
       const pf = processProfile(
         fDir, modulePath, moduleName, pname,
-        useJunit ? testStats : null, useJunit ? xmlMtime : 0, gp, useJunit ? diffPcts : {},
+        testStats, xmlMtime, gp, diffPcts,
         profile.delta_prefix !== undefined ? profile.delta_prefix : 'delta-',
         profile.delta_suffix || '',
         profile.actual_suffix || '',
@@ -133,7 +133,7 @@ function resolveGolden(modulePath, goldenPatterns, snapshotName) {
       if (matches.length) return matches[0];
     } else {
       const candidate = path.join(modulePath, resolved);
-      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+      try { if (fs.statSync(candidate).isFile()) return candidate; } catch {}
     }
   }
   return null;
@@ -145,9 +145,8 @@ function processProfile(
   deltaPrefix = 'delta-', deltaSuffix = '', actualSuffix = '',
 ) {
   const results = [];
-  if (!failuresDir || !fs.existsSync(failuresDir) || !fs.statSync(failuresDir).isDirectory()) {
-    return results;
-  }
+  if (!failuresDir) return results;
+  try { if (!fs.statSync(failuresDir).isDirectory()) return results; } catch { return results; }
 
   let current = detectCurrentFailures(failuresDir, deltaPrefix, deltaSuffix);
   log(`[scan] ${profileName} in ${failuresDir}: ${current.length} candidates, xmlMtime=${xmlMtime}, testStats.failed=${testStats?.failed}`);
@@ -162,10 +161,11 @@ function processProfile(
     if (current.length < before) log(`[scan] filtered ${before - current.length} stale deltas (older than xmlMtime ${xmlMtime})`);
   }
 
-  const goldenCache = {};
+  const goldenCache = new Map();
   for (const f of current) {
     const base = deltaToBase(path.basename(f), deltaPrefix, deltaSuffix);
-    goldenCache[path.basename(f)] = resolveGolden(modulePath, goldenPatterns, base);
+    // Key by full path so subdirs with same basename don't collide in compare mode
+    goldenCache.set(f, resolveGolden(modulePath, goldenPatterns, base));
   }
 
   const noDeltaConvention = !deltaPrefix && !deltaSuffix;
@@ -173,7 +173,7 @@ function processProfile(
   for (const candidatePath of current) {
     const base = deltaToBase(path.basename(candidatePath), deltaPrefix, deltaSuffix);
     const parsed = parseFilename(base);
-    const goldenPath = goldenCache[path.basename(candidatePath)];
+    const goldenPath = goldenCache.get(candidatePath);
 
     let actualPath, deltaFilePath;
     if (noDeltaConvention) {

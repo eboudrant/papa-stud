@@ -11,41 +11,38 @@
 
 const fs = require('fs');
 const path = require('path');
+const { writeJson } = require('./jsonStore');
 
 const CURRENT_SCHEMA = 2;
 
 const MIGRATIONS = [
-  // v1 → v2: add strategy to profiles and custom templates
+  // v1 → v2: add strategy to projects, strip result_source from profiles and templates
   function migrateV1toV2(dataDir) {
     const projectsPath = path.join(dataDir, 'projects.json');
     const templatesPath = path.join(dataDir, 'templates.json');
+    const templates = require('./templates');
+    templates.setDataDir(dataDir);
 
-    // Migrate projects
+    // Migrate projects: add project-level strategy, create profiles if missing, strip result_source
     try {
       const raw = fs.readFileSync(projectsPath, 'utf8');
       const projects = JSON.parse(raw);
       let changed = false;
       for (const p of projects) {
+        if (!p.strategy) { p.strategy = 'gradle'; changed = true; }
         if (!p.profiles) {
-          p.profiles = [{
-            name: 'Paparazzi',
-            failures_dir: 'build/paparazzi/failures',
-            golden_patterns: ['src/test/snapshots/images/{name}.png'],
-            delta_prefix: 'delta-',
-            delta_suffix: '',
-            actual_suffix: '',
-            strategy: 'gradle',
-            template_id: 'paparazzi',
-          }];
+          const paparazzi = templates.getTemplate('paparazzi');
+          p.profiles = [templates.templateToProfile(paparazzi)];
           changed = true;
         }
         for (const pr of p.profiles || []) {
-          if (!pr.strategy) { pr.strategy = 'gradle'; changed = true; }
+          if ('result_source' in pr) { delete pr.result_source; changed = true; }
+          if ('strategy' in pr) { delete pr.strategy; changed = true; }
         }
       }
       if (changed) {
         console.log(`[migration] v1→v2: updated ${projects.length} project(s) in projects.json`);
-        atomicWrite(projectsPath, projects);
+        writeJson(projectsPath, projects);
       } else {
         console.log(`[migration] v1→v2: projects.json already up to date`);
       }
@@ -53,17 +50,18 @@ const MIGRATIONS = [
       if (e.code !== 'ENOENT') console.log(`[migration] v1→v2: skipping projects.json (${e.message})`);
     }
 
-    // Migrate custom templates
+    // Migrate custom templates: strip result_source and profile-level strategy
     try {
       const raw = fs.readFileSync(templatesPath, 'utf8');
-      const templates = JSON.parse(raw);
+      const tmpls = JSON.parse(raw);
       let changed = false;
-      for (const t of templates) {
-        if (!t.strategy) { t.strategy = 'gradle'; changed = true; }
+      for (const t of tmpls) {
+        if ('result_source' in t) { delete t.result_source; changed = true; }
+        if ('strategy' in t) { delete t.strategy; changed = true; }
       }
       if (changed) {
-        console.log(`[migration] v1→v2: updated ${templates.length} template(s) in templates.json`);
-        atomicWrite(templatesPath, templates);
+        console.log(`[migration] v1→v2: updated ${tmpls.length} template(s) in templates.json`);
+        writeJson(templatesPath, tmpls);
       } else {
         console.log(`[migration] v1→v2: templates.json already up to date`);
       }
@@ -72,12 +70,6 @@ const MIGRATIONS = [
     }
   },
 ];
-
-function atomicWrite(filePath, data) {
-  const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, filePath);
-}
 
 function backupDataFiles(dataDir, fromVersion) {
   const backupDir = path.join(dataDir, 'backups', `v${fromVersion}`);
@@ -118,7 +110,7 @@ function migrateDataFiles(dataDir) {
     }
   }
 
-  atomicWrite(metaPath, { schema_version: CURRENT_SCHEMA });
+  writeJson(metaPath, { schema_version: CURRENT_SCHEMA });
   console.log(`[migration] complete — now at schema v${CURRENT_SCHEMA}`);
 }
 

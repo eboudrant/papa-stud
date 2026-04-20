@@ -172,7 +172,7 @@ function createRouter() {
     const body = req.body;
     if (!body || !body.path) return res.status(400).json({ error: 'path required' });
     const name = body.name || path.basename(body.path);
-    const project = projects.addProject(name, body.path, body.template_ids);
+    const project = projects.addProject(name, body.path, body.template_ids, body.strategy);
     res.status(201).json(project);
   });
 
