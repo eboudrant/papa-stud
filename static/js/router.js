@@ -102,6 +102,7 @@ function _buildNavItems(hash) {
   const projectName = _navContext.projectName || '';
 
   if (detailMatch) {
+    const scanId = detailMatch[1];
     const className = _navContext.className || '';
     const methodName = _navContext.methodName || '';
     let testLabel;
@@ -115,7 +116,7 @@ function _buildNavItems(hash) {
     }
     return [
       { key: 'back', tag: 'button', cls: 'nav-back', content: _backArrowSvg },
-      { key: 'project', tag: 'span', cls: 'nav-label', content: escHtml(projectName || 'Review') },
+      { key: 'project', tag: 'a', cls: 'nav-link', href: `#/scans/${scanId}`, content: escHtml(projectName || 'Review') },
       { key: 'sep1', tag: 'span', cls: 'nav-sep', content: '/' },
       { key: 'test', tag: 'span', cls: 'nav-link active nav-ellipsis', content: testLabel },
     ];
@@ -141,6 +142,7 @@ function _createNavEl(item) {
     el.title = 'Back';
     el.addEventListener('click', _navGoBack);
   }
+  if (item.href) el.setAttribute('href', item.href);
   el.innerHTML = item.content;
   return el;
 }
@@ -157,7 +159,9 @@ function _updateNav(hash) {
   if (newKeys.length === oldKeys.length && newKeys.every((k, i) => k === oldKeys[i])) {
     for (const item of newItems) {
       const el = nav.querySelector(`[data-nav-key="${item.key}"]`);
-      if (el) el.innerHTML = item.content;
+      if (!el) continue;
+      el.innerHTML = item.content;
+      if (item.href) el.setAttribute('href', item.href);
     }
     return;
   }
