@@ -32,6 +32,7 @@ function showReview(scanId) {
             <option value="diff">Sort: % diff</option>
           </select>
           <div class="toolbar-actions">
+            <button class="btn btn-sm btn-success" id="accept-all-btn" onclick="_acceptAll('${escAttr(scanId)}')" title="Copy every actual image over its golden" style="display:none">&check; Accept All</button>
             <button class="btn btn-sm" id="export-video-btn" onclick="_exportVideo('${scanId}')">Export Video</button>
             <button class="btn btn-sm" onclick="_rescanFromReview('${escAttr(scanId)}')">Re-scan</button>
             <!-- TODO: re-enable Watch with polling-based approach (chokidar EMFILE on large projects) -->
@@ -186,7 +187,7 @@ function _appendGrid(failures) {
 
   for (const f of failures) {
     const card = document.createElement('a');
-    card.className = 'thumb-card';
+    card.className = 'thumb-card' + (f.status === 'accepted' ? ' thumb-accepted' : '');
     card.href = `#/scans/${scanId}/review/${encodeURIComponent(f.filename)}`;
 
     const thumbPath = f.delta_path || f.actual_path;
@@ -194,6 +195,7 @@ function _appendGrid(failures) {
     card.innerHTML = `
       <div class="thumb-img-wrap">
         ${imgSrc ? `<img loading="lazy" src="${imgSrc}" alt="${escAttr(f.filename)}" width="280" height="180">` : '<div class="thumb-placeholder">No image</div>'}
+        ${f.status === 'accepted' ? '<div class="thumb-accepted-badge" title="Accepted">&check;</div>' : ''}
       </div>
       <div class="thumb-info">
         <span class="thumb-name" title="${escAttr(f.filename)}">${escHtml(f.class_name || f.filename)}</span>
@@ -210,6 +212,12 @@ function _updateCounter() {
   const el = document.getElementById('review-counter');
   if (!_scanData) return;
   el.textContent = `${_scanData.stats.total} failures`;
+
+  const acceptBtn = document.getElementById('accept-all-btn');
+  if (acceptBtn) {
+    const pending = _scanData.stats.total - (_scanData.stats.accepted || 0);
+    acceptBtn.style.display = pending > 0 ? '' : 'none';
+  }
 
   const grid = document.getElementById('thumbnail-grid');
   if (_allFailures.length === 0 && grid) {
@@ -359,6 +367,36 @@ async function _exportVideo(scanId) {
   }
 }
 
+
+// --- Accept All ---
+
+async function _acceptAll(scanId) {
+  const btn = document.getElementById('accept-all-btn');
+  const originalLabel = btn?.innerHTML;
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Accepting...'; }
+  try {
+    const result = await apiPost(`/api/scans/${scanId}/accept-all`, {});
+    if (result?.error) {
+      showToast('Failed: ' + result.error, 'error');
+    } else {
+      const msg = result.errors?.length
+        ? `Accepted ${result.accepted} (${result.errors.length} failed)`
+        : `Accepted ${result.accepted} baseline(s)`;
+      showToast(msg, result.errors?.length ? 'error' : 'success');
+      const failed = new Set((result.errors || []).map(e => e.filename));
+      for (const f of _allFailures) {
+        if (!failed.has(f.filename)) f.status = 'accepted';
+      }
+      if (_scanData) _scanData.stats = result.stats;
+      _updateCounter();
+      _renderGrid();
+    }
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
+  } finally {
+    if (btn && originalLabel !== undefined) { btn.disabled = false; btn.innerHTML = originalLabel; }
+  }
+}
 
 // --- Re-scan ---
 

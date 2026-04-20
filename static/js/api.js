@@ -57,6 +57,7 @@ function escAttr(str) {
 }
 
 /** Show a toast notification. type: 'success' | 'info' | 'error' */
+let _toastTimer = null;
 function showToast(message, type, duration) {
   let container = document.getElementById('toast-container');
   if (!container) {
@@ -65,11 +66,14 @@ function showToast(message, type, duration) {
     container.className = 'toast-container';
     document.body.appendChild(container);
   }
+  // Replace any existing toast — don't accumulate
+  container.innerHTML = '';
+  if (_toastTimer) clearTimeout(_toastTimer);
   const toast = document.createElement('div');
   toast.className = `toast toast-${type || 'success'}`;
   toast.textContent = message;
   container.appendChild(toast);
-  setTimeout(() => toast.remove(), duration || 4000);
+  _toastTimer = setTimeout(() => { toast.remove(); _toastTimer = null; }, duration || 4000);
 }
 
 /** Render a snapshot pass/fail bar. cssClass defaults to 'test-bar'. */

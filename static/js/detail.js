@@ -80,6 +80,11 @@ function showDetail(scanId, filename) {
       case '3': _setViewMode('slider', scanId); break;
       case 'e': case 'E': _cycleViewMode(scanId); break;
       case '0': case 'r': case 'R': _zoomReset(); break;
+      case 'Enter':
+        if (_detailFailure?.has_actual && _detailFailure.status !== 'accepted') {
+          _acceptBaseline(scanId, _detailFailure.filename);
+        }
+        break;
       case 't': case 'T':
         if (_viewMode !== 'toggle') {
           _setViewMode('toggle', scanId);
@@ -152,6 +157,7 @@ function _renderDetail(scanId) {
   // When actual is missing (e.g., figma handler only writes delta), use delta as fallback
   const effectiveActual = actualSrc || deltaSrc;
   const hasDelta = !!deltaSrc;
+  const canAccept = f.has_actual && f.status !== 'accepted';
 
   // Auto-switch to toggle if no delta available
   if (!hasDelta && _viewMode === 'delta') _viewMode = 'toggle';
@@ -237,6 +243,9 @@ function _renderDetail(scanId) {
           <button class="pill ${_viewMode === 'slider' ? 'active' : ''}" onclick="_setViewMode('slider', '${scanId}')">Slider (${hasDelta ? '3' : '2'})</button>
         </div>
         ${f.diff_pct != null ? `<span class="detail-diff-pct" style="color:${_diffColor(f.diff_pct)}">${f.diff_pct.toFixed(3)}%</span>` : ''}
+        ${!f.has_actual ? '' : canAccept
+          ? `<button class="btn btn-sm btn-success" title="Accept as baseline (Enter)" onclick="_acceptBaseline('${scanId}', '${escAttr(f.filename)}')">&check; Accept</button>`
+          : `<span class="accept-badge" title="Accepted">&check; Accepted</span>`}
         <div class="detail-nav">
           <button class="btn" onclick="_detailPrev('${scanId}')" ${_detailIndex <= 0 ? 'disabled' : ''}>&larr; Prev</button>
           <span class="counter">${_detailIndex + 1} / ${_detailFailures.length}</span>
@@ -248,7 +257,7 @@ function _renderDetail(scanId) {
         ${escHtml(f.filename)}
         <button class="btn-copy" onclick="_copyPath('${escAttr(f.delta_path || '')}', this)" title="Copy absolute path">copy</button>
       </div>
-      <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  &larr;=prev  &rarr;=next  esc=back</div>
+      <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  &larr;=prev  &rarr;=next  ${canAccept ? 'Enter=accept  ' : ''}esc=back</div>
     </div>
   `;
 }
@@ -359,6 +368,25 @@ function _detailNext(scanId) {
     _detailFailure = _detailFailures[_detailIndex];
 
     navigateReplace(`/scans/${scanId}/review/${encodeURIComponent(_detailFailure.filename)}`);
+  }
+}
+
+async function _acceptBaseline(scanId, filename) {
+  try {
+    const result = await apiPost(`/api/scans/${scanId}/failures/${encodeURIComponent(filename)}/accept`, {});
+    if (result && result.error) {
+      showToast('Failed: ' + result.error, 'error');
+      return;
+    }
+    if (_detailFailure) _detailFailure.status = 'accepted';
+    showToast('Baseline accepted', 'success');
+    if (_detailIndex < _detailFailures.length - 1) {
+      _detailNext(scanId);
+    } else {
+      _renderDetail(scanId);
+    }
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
   }
 }
 

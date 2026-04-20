@@ -273,6 +273,20 @@ function createRouter() {
     else res.status(404).json({ error: 'not found' });
   });
 
+  router.post('/api/scans/:scanId/failures/:filename/accept', (req, res) => {
+    const result = projects.acceptBaseline(req.params.scanId, req.params.filename);
+    if (!result) return res.status(404).json({ error: 'not found' });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result);
+  });
+
+  router.post('/api/scans/:scanId/accept-all', (req, res) => {
+    const result = projects.acceptAllBaselines(req.params.scanId);
+    if (!result) return res.status(404).json({ error: 'scan not found' });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result);
+  });
+
   // --- API DELETE ---
 
   router.delete('/api/templates/:id', (req, res) => {
