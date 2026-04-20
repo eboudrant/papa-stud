@@ -183,6 +183,22 @@ function themeBgColor(theme) {
 ipcMain.handle('get-theme', () => readTheme());
 ipcMain.on('set-theme', (_, value) => writeTheme(value));
 
+let _dragStart = null;
+ipcMain.on('start-window-drag', (_, x, y) => {
+  if (!mainWindow) return;
+  const [wx, wy] = mainWindow.getPosition();
+  _dragStart = { wx, wy, mx: x, my: y };
+});
+ipcMain.on('window-drag-move', (_, x, y) => {
+  if (!mainWindow || !_dragStart) return;
+  mainWindow.setPosition(
+    _dragStart.wx + (x - _dragStart.mx),
+    _dragStart.wy + (y - _dragStart.my)
+  );
+});
+
+ipcMain.on('stop-window-drag', () => { _dragStart = null; });
+
 ipcMain.on('toggle-maximize', () => {
   if (!mainWindow) return;
   if (mainWindow.isMaximized()) mainWindow.unmaximize();

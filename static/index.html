@@ -8,9 +8,9 @@
 </head>
 <body>
   <header>
-    <a href="#/" class="header-brand">
+    <span class="header-brand" id="header-brand">
       <h1>Papa Stud<span class="title-io">.io</span></h1>
-    </a>
+    </span>
     <nav id="nav-bar" class="nav-bar"></nav>
     <a href="#/settings" class="btn-icon" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></a>
   </header>
@@ -60,11 +60,40 @@
         _toggleTheme();
       }
     });
-    // Double-click header to maximize/unmaximize (Electron)
-    document.querySelector('header').addEventListener('dblclick', function(e) {
-      if (e.target.closest('a, button, input, select')) return;
-      if (window.electronAPI) window.electronAPI.toggleMaximize();
-    });
+    // JS-based header drag + click (no -webkit-app-region needed)
+    (function() {
+      const header = document.querySelector('header');
+      let dragging = false;
+      let startX, startY, moved;
+
+      header.addEventListener('mousedown', function(e) {
+        if (e.target.closest('button, input, select, .btn-icon')) return;
+        startX = e.screenX;
+        startY = e.screenY;
+        moved = false;
+        dragging = true;
+        if (window.electronAPI) window.electronAPI.startWindowDrag(e.screenX, e.screenY);
+      });
+
+      window.addEventListener('mousemove', function(e) {
+        if (!dragging) return;
+        if (Math.abs(e.screenX - startX) > 3 || Math.abs(e.screenY - startY) > 3) moved = true;
+        if (moved && window.electronAPI) window.electronAPI.windowDragMove(e.screenX, e.screenY);
+      });
+
+      window.addEventListener('mouseup', function() {
+        if (!dragging) return;
+        const wasDrag = moved;
+        dragging = false;
+        if (wasDrag && window.electronAPI) window.electronAPI.stopWindowDrag();
+      });
+
+      // Double-click header to maximize/unmaximize
+      header.addEventListener('dblclick', function(e) {
+        if (e.target.closest('button, input, select, .btn-icon')) return;
+        if (window.electronAPI) window.electronAPI.toggleMaximize();
+      });
+    })();
   </script>
   <script src="/static/js/api.js"></script>
   <script src="/static/js/router.js"></script>
@@ -73,5 +102,16 @@
   <script src="/static/js/review.js"></script>
   <script src="/static/js/detail.js"></script>
   <script src="/static/js/app.js"></script>
+  <script>
+    // Logo: click goes home (only if mouse didn't move = not a drag)
+    (function() {
+      const brand = document.getElementById('header-brand');
+      let sx, sy;
+      brand.addEventListener('mousedown', (e) => { sx = e.screenX; sy = e.screenY; });
+      brand.addEventListener('click', (e) => {
+        if (Math.abs(e.screenX - sx) < 4 && Math.abs(e.screenY - sy) < 4) _goHome();
+      });
+    })();
+  </script>
 </body>
 </html>

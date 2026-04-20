@@ -53,18 +53,39 @@ function _onHashChange() {
 const _isElectron = new URLSearchParams(window.location.search).has('electron');
 if (_isElectron) document.body.classList.add('electron');
 
-let _navDepth = 0;
-window.addEventListener('hashchange', () => { _navDepth++; });
+// --- Back navigation ---
+// Track forward navigations so we know if history.back() is safe.
+// history.back() on hashchange also fires hashchange, but we only count
+// forward navigations (navigate/link clicks), not back navigations.
+let _historyDepth = 0;
+let _isGoingBack = false;
+
+window.addEventListener('hashchange', () => {
+  if (_isGoingBack) {
+    _isGoingBack = false;
+    _historyDepth = Math.max(0, _historyDepth - 1);
+  } else {
+    _historyDepth++;
+  }
+});
+
+function _goHome() {
+  _historyDepth = 0;
+  _isGoingBack = false;
+  window.location.hash = '/';
+}
 
 function _navGoBack() {
-  if (_navDepth > 0) {
+  if (_historyDepth > 0) {
+    _isGoingBack = true;
     history.back();
   } else {
     navigate('/');
   }
 }
 
-/** Update nav breadcrumbs. Call setNavContext() from pages to add scan/project info. */
+// --- Nav breadcrumbs ---
+
 let _navContext = {};
 
 function setNavContext(ctx) {
@@ -74,8 +95,6 @@ function setNavContext(ctx) {
 
 const _backArrowSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>';
 
-let _navKeys = []; // previous nav item keys for diffing
-
 function _buildNavItems(hash) {
   const detailMatch = hash.match(/^\/scans\/([^/]+)\/review\/(.+)$/);
   const scanMatch = hash.match(/^\/scans\/([^/]+)$/);
@@ -83,7 +102,6 @@ function _buildNavItems(hash) {
   const projectName = _navContext.projectName || '';
 
   if (detailMatch) {
-    const scanId = detailMatch[1];
     const className = _navContext.className || '';
     const methodName = _navContext.methodName || '';
     let testLabel;
@@ -115,9 +133,9 @@ function _buildNavItems(hash) {
   return [];
 }
 
-function _createNavEl(item, animate) {
+function _createNavEl(item) {
   const el = document.createElement(item.tag);
-  el.className = item.cls + (animate ? ' nav-enter' : '');
+  el.className = item.cls;
   el.dataset.navKey = item.key;
   if (item.key === 'back') {
     el.title = 'Back';
@@ -132,46 +150,21 @@ function _updateNav(hash) {
   if (!nav) return;
 
   const newItems = _buildNavItems(hash);
-  const oldKeys = [..._navKeys];
   const newKeys = newItems.map(i => i.key);
+  const oldKeys = [...nav.querySelectorAll('[data-nav-key]')].map(el => el.dataset.navKey);
 
-  const removing = oldKeys.filter(k => !newKeys.includes(k));
-  const adding = newKeys.filter(k => !oldKeys.includes(k));
-
-  // Same keys, just update content in place (no animation reset)
-  if (removing.length === 0 && adding.length === 0) {
+  // Same structure — update content in place
+  if (newKeys.length === oldKeys.length && newKeys.every((k, i) => k === oldKeys[i])) {
     for (const item of newItems) {
       const el = nav.querySelector(`[data-nav-key="${item.key}"]`);
-      if (el) {
-        el.innerHTML = item.content;
-      }
+      if (el) el.innerHTML = item.content;
     }
-    _navKeys = newKeys;
     return;
   }
 
-  _navKeys = newKeys;
-
-  // Fade out removed items, then rebuild
-  if (removing.length > 0) {
-    let pending = 0;
-    nav.querySelectorAll('[data-nav-key]').forEach(el => {
-      if (removing.includes(el.dataset.navKey)) {
-        el.classList.add('nav-exit');
-        pending++;
-        el.addEventListener('animationend', () => {
-          if (--pending === 0) _rebuildNav(nav, newItems, adding);
-        }, { once: true });
-      }
-    });
-  } else {
-    _rebuildNav(nav, newItems, adding);
-  }
-}
-
-function _rebuildNav(nav, items, adding) {
+  // Different structure — rebuild immediately (no animation to avoid stale state)
   nav.innerHTML = '';
-  for (const item of items) {
-    nav.appendChild(_createNavEl(item, adding.includes(item.key)));
+  for (const item of newItems) {
+    nav.appendChild(_createNavEl(item));
   }
 }

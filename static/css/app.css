@@ -77,18 +77,13 @@ header {
   top: 0;
   z-index: 100;
 }
-.electron header { padding-left: 80px; -webkit-app-region: drag; user-select: none; }
-.electron header button, .electron header .btn-icon { -webkit-app-region: no-drag; }
+.electron header { padding-left: 80px; user-select: none; }
+.header-brand { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .electron header h1 { font-size: 13px; }
 header a { text-decoration: none; color: inherit; }
-.header-brand { display: flex; align-items: center; gap: 12px; }
 header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
 .title-io { font-weight: 300; color: var(--text-light); }
 .nav-bar { display: flex; align-items: center; gap: 4px; margin-left: 4px; flex: 1; min-width: 0; }
-.nav-enter { animation: nav-item-in 0.4s ease both; }
-.nav-exit { animation: nav-item-out 0.3s ease both; }
-@keyframes nav-item-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
-@keyframes nav-item-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(8px); } }
 .nav-back { display: inline-flex; align-items: center; color: var(--text-dim); text-decoration: none; padding: 2px 6px; border-radius: 4px; transition: background 0.15s, color 0.15s; flex-shrink: 0; background: none; border: none; cursor: pointer; font: inherit; }
 .nav-back:hover { background: var(--accent-light); color: var(--accent); }
 .nav-label { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; flex-shrink: 0; padding: 0; }
