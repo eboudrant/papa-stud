@@ -303,6 +303,78 @@ function batchUpdateStatus(scanId, filenames, status) {
   return scan.stats;
 }
 
+// Returns null on success, error string on failure.
+function _copyActualToGolden(failure, rootPrefix) {
+  if (!failure.actual_path) return 'no actual image to accept';
+  if (!failure.golden_path) return 'no golden path resolved; check profile patterns';
+
+  let actualReal;
+  try { actualReal = fs.realpathSync(failure.actual_path); } catch { return 'actual image missing'; }
+
+  // Create parent dir first so we can realpath it (golden file itself may not exist yet)
+  let goldenResolved;
+  try {
+    fs.mkdirSync(path.dirname(failure.golden_path), { recursive: true });
+    goldenResolved = path.join(fs.realpathSync(path.dirname(failure.golden_path)), path.basename(failure.golden_path));
+  } catch (e) { return 'golden path invalid: ' + e.message; }
+
+  if (!actualReal.startsWith(rootPrefix)) return 'actual outside project';
+  if (!goldenResolved.startsWith(rootPrefix)) return 'golden outside project';
+
+  try { fs.copyFileSync(actualReal, goldenResolved); }
+  catch (e) { return 'copy failed: ' + e.message; }
+  return null;
+}
+
+function _getScanAndRoot(scanId) {
+  const scan = readJson(scanPath(scanId));
+  if (!scan) return { scan: null };
+  const project = getProject(scan.projectId);
+  if (!project) return { scan, error: 'project not found' };
+  let root;
+  try { root = fs.realpathSync(project.path); } catch { return { scan, error: 'project path invalid' }; }
+  return { scan, rootPrefix: root + path.sep };
+}
+
+function acceptBaseline(scanId, filename) {
+  const { scan, rootPrefix, error } = _getScanAndRoot(scanId);
+  if (!scan) return null;
+  if (error) return { error };
+  const failure = scan.failures.find(f => f.filename === filename);
+  if (!failure) return null;
+
+  const err = _copyActualToGolden(failure, rootPrefix);
+  if (err) return { error: err };
+
+  failure.status = 'accepted';
+  scan.stats = computeStats(scan.failures);
+  writeJson(scanPath(scanId), scan);
+  return { stats: scan.stats };
+}
+
+function acceptAllBaselines(scanId) {
+  const { scan, rootPrefix, error } = _getScanAndRoot(scanId);
+  if (!scan) return null;
+  if (error) return { error };
+
+  let accepted = 0;
+  const errors = [];
+  for (const failure of scan.failures) {
+    if (failure.status === 'accepted') continue;
+    const err = _copyActualToGolden(failure, rootPrefix);
+    if (err) {
+      errors.push({ filename: failure.filename, error: err });
+    } else {
+      failure.status = 'accepted';
+      accepted++;
+    }
+  }
+
+  scan.stats = computeStats(scan.failures);
+  writeJson(scanPath(scanId), scan);
+  return { stats: scan.stats, accepted, errors };
+}
+
 function isPathUnderProject(filePath) {
   const allProjects = listProjects();
   const resolved = path.resolve(filePath);
@@ -353,5 +425,7 @@ module.exports = {
   updateScanModule,
   updateFailureStatus,
   batchUpdateStatus,
+  acceptBaseline,
+  acceptAllBaselines,
   scanPath,
 };

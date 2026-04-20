@@ -113,6 +113,8 @@ header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 .btn-danger-text { color: var(--danger); border-color: transparent; }
 .btn-danger-text:hover { background: var(--danger-light); }
+.btn-success { color: var(--success); border-color: var(--success); background: var(--success-light); }
+.btn-success:hover { background: var(--success); color: white; }
 
 /* Inputs */
 .input { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; outline: none; background: var(--surface); color: var(--text); }
@@ -297,9 +299,12 @@ select.input { appearance: auto; }
 .thumb-img-wrap {
   width: 100%; height: 180px; overflow: hidden; background: var(--bg-inset);
   display: flex; align-items: center; justify-content: center;
+  position: relative;
 }
 .thumb-img-wrap img { width: 100%; height: 100%; object-fit: contain; }
 .thumb-placeholder { color: var(--text-light); font-size: 13px; }
+.thumb-accepted { opacity: 0.65; }
+.thumb-accepted-badge { position: absolute; top: 8px; right: 8px; background: var(--success); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
 .thumb-info { padding: 10px 12px; display: flex; align-items: center; gap: 6px; }
 .thumb-name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .thumb-method { font-size: 12px; color: var(--text-dim); }
@@ -318,6 +323,7 @@ select.input { appearance: auto; }
 .detail-title { font-size: 18px; font-weight: 600; display: block; }
 .detail-subtitle { font-size: 13px; color: var(--text-dim); display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-diff-pct { font-size: 22px; font-weight: 700; font-family: monospace; flex-shrink: 0; }
+.accept-badge { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 10px; color: var(--success); font-size: 12px; font-weight: 600; flex-shrink: 0; }
 .detail-nav { display: flex; align-items: center; gap: 8px; }
 
 .detail-mode-tabs { display: flex; gap: 4px; }
