@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const projects = require('../src/projects');
@@ -63,6 +63,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 13 },
     backgroundColor: themeBgColor(savedTheme),
+    icon: path.join(__dirname, '..', 'static', 'icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -87,12 +88,27 @@ function createWindow() {
   });
 }
 
+function showAbout() {
+  const iconPath = path.join(__dirname, '..', 'static', 'icon.png');
+  const version = app.isPackaged ? `Version ${app.getVersion()}\n\n` : '';
+  dialog.showMessageBox({
+    type: 'info',
+    buttons: ['OK'],
+    defaultId: 0,
+    icon: nativeImage.createFromPath(iconPath).resize({ width: 96, height: 96 }),
+    title: 'About Papa Stud.io',
+    message: 'Papa Stud.io',
+    detail: `${version}Screenshot failure reviewer for Android testing tools.`,
+    noLink: true,
+  });
+}
+
 function buildMenu() {
   const template = [
     {
       label: app.name,
       submenu: [
-        { role: 'about' },
+        { label: 'About Papa Stud.io', click: showAbout },
         { type: 'separator' },
         { role: 'hide' },
         { role: 'hideOthers' },
@@ -208,6 +224,11 @@ ipcMain.on('toggle-maximize', () => {
 app.whenReady().then(async () => {
   setupLogging();
   buildMenu();
+  // In dev, macOS shows Electron's default dock icon; packaged builds use
+  // forge.config.js's icon field automatically.
+  if (process.platform === 'darwin' && app.dock) {
+    try { app.dock.setIcon(path.join(__dirname, '..', 'static', 'icon.png')); } catch {}
+  }
   await startServer();
   createWindow();
 
