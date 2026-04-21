@@ -17,6 +17,12 @@ brew tap eboudrant/tap
 brew install --cask papastud
 ```
 
+## Update
+
+```
+brew update && brew upgrade --cask papastud
+```
+
 ## Run from source
 
 ```bash
