@@ -11,6 +11,7 @@ const scanJobs = require('./scanJobs');
 const templates = require('./templates');
 const video = require('./video');
 const config = require('./config');
+const updateCheck = require('./updateCheck');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
 const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
@@ -22,6 +23,10 @@ function createRouter() {
 
   router.get('/api/health', (req, res) => {
     res.json({ status: 'ok', watchMode: 'native', ffmpeg: video.hasFfmpeg() });
+  });
+
+  router.get('/api/update-check', async (req, res) => {
+    res.json(await updateCheck.checkForUpdate());
   });
 
   router.get('/api/templates', (req, res) => {

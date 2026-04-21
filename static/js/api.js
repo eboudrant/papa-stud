@@ -76,6 +76,17 @@ function showToast(message, type, duration) {
   _toastTimer = setTimeout(() => { toast.remove(); _toastTimer = null; }, duration || 4000);
 }
 
+async function copyToClipboard(text, successMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    if (successMsg) showToast(successMsg, 'success');
+    return true;
+  } catch {
+    showToast('Copy failed', 'error');
+    return false;
+  }
+}
+
 /** Render a snapshot pass/fail bar. cssClass defaults to 'test-bar'. */
 function snapshotBar(total, failed, cssClass) {
   if (!total || total === 0) return '';

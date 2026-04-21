@@ -41,6 +41,7 @@ function startServer() {
   const dataDir = path.join(app.getPath('userData'), 'data');
   migrateDataFiles(dataDir);
   projects.setDataDir(dataDir);
+  if (app.isPackaged) process.env.PAPASTUD_VERSION = app.getVersion();
 
   return new Promise((resolve, reject) => {
     server = createApp().listen(0, '127.0.0.1', () => {

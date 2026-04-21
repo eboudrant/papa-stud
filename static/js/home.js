@@ -4,6 +4,7 @@ async function showHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home">
+      <div id="update-banner" style="display:none"></div>
       <section class="section">
         <h2>Scans</h2>
         <div id="scans-list" class="card-list"></div>
@@ -54,6 +55,40 @@ async function _loadHome() {
   _renderProjects(projectsList);
   _renderTemplates(templatesList);
   _renderScans(scansList);
+  _checkForUpdateOnce();
+}
+
+const UPDATE_CMD = 'brew upgrade --cask papastud';
+const UPDATE_DISMISSED_KEY = 'papastud_update_dismissed';
+let _updateChecked = false;
+
+async function _checkForUpdateOnce() {
+  if (_updateChecked) return;
+  _updateChecked = true;
+  const info = await apiGet('/api/update-check').catch(() => ({ available: false }));
+  _renderUpdateBanner(info);
+}
+
+function _renderUpdateBanner(info) {
+  const el = document.getElementById('update-banner');
+  if (!el || !info || !info.available) return;
+  if (localStorage.getItem(UPDATE_DISMISSED_KEY) === info.latest) return;
+  el.style.display = '';
+  el.className = 'update-banner';
+  el.innerHTML = `
+    <span class="update-dot"></span>
+    <span class="update-text">New version available: <strong>v${escHtml(info.latest)}</strong> (you have v${escHtml(info.current)}). Run <code>${UPDATE_CMD}</code><button class="update-copy" title="Copy command" onclick="copyToClipboard('${UPDATE_CMD}', 'Command copied')" aria-label="Copy command">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="3" width="9" height="11" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg>
+    </button></span>
+    <a href="${escAttr(info.url)}" target="_blank" rel="noopener" class="update-link">Release notes</a>
+    <button class="update-dismiss" title="Dismiss" onclick="_dismissUpdate('${escAttr(info.latest)}')">&times;</button>
+  `;
+}
+
+function _dismissUpdate(latest) {
+  localStorage.setItem(UPDATE_DISMISSED_KEY, latest);
+  const el = document.getElementById('update-banner');
+  if (el) el.style.display = 'none';
 }
 
 function _renderProjects(projectsList) {
