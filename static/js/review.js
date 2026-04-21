@@ -35,7 +35,7 @@ function showReview(scanId) {
             <button class="btn btn-sm btn-success" id="accept-all-btn" onclick="_acceptAll('${escAttr(scanId)}')" title="Copy every actual image over its golden" style="display:none">&check; Accept All</button>
             <button class="btn btn-sm" id="export-video-btn" onclick="_exportVideo('${scanId}')">Export Video</button>
             <button class="btn btn-sm" onclick="_rescanFromReview('${escAttr(scanId)}')">Re-scan</button>
-            <!-- TODO: re-enable Watch with polling-based approach (chokidar EMFILE on large projects) -->
+            <button class="btn btn-sm watch-btn" id="watch-toggle" onclick="_toggleWatch('${escAttr(scanId)}')" title="Re-scan modules automatically as test outputs change">Watch</button>
             <span id="review-counter" class="counter"></span>
           </div>
         </div>

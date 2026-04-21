@@ -15,7 +15,6 @@
     "test:screenshots:build": "docker build -f Dockerfile.test -t papastud-test ."
   },
   "dependencies": {
-    "chokidar": "^5.0.0",
     "express": "^5.0.0",
     "fast-glob": "^3.3.0",
     "fast-xml-parser": "^5.0.0"

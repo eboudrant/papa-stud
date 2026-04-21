@@ -261,6 +261,19 @@ function updateScanModule(scanId, moduleName, moduleData, moduleFailures) {
   }
   if (!found) scan.modules.push(moduleData);
 
+  // Preserve accept/reject decisions across rescans: a re-detected failure with
+  // the same filename keeps the user's prior status until it actually goes away.
+  const priorStatus = new Map();
+  for (const f of scan.failures) {
+    if (f.module === moduleName && (f.status === 'accepted' || f.status === 'rejected')) {
+      priorStatus.set(f.filename, f.status);
+    }
+  }
+  for (const f of moduleFailures) {
+    const prior = priorStatus.get(f.filename);
+    if (prior) f.status = prior;
+  }
+
   scan.failures = scan.failures.filter(f => f.module !== moduleName).concat(moduleFailures);
   scan.stats = computeStats(scan.failures);
   writeJson(scanPath(scanId), scan);
