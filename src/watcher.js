@@ -1,130 +1,109 @@
 /**
- * Realtime file watcher for scan updates.
- * Uses chokidar for instant OS-native notifications.
- * Debounces per-module to avoid re-processing during a test run.
+ * Realtime watcher for scan updates.
+ *
+ * Polls directory mtimes every POLL_INTERVAL ms. Chokidar/fs.watch are avoided
+ * because each watched directory consumes a file descriptor, and Gradle monorepos
+ * (hundreds of modules × several watch dirs per module) blow past the default
+ * macOS FD limit with EMFILE. A dir's mtime bumps when a file inside it is
+ * created, deleted, or renamed — but not when a file is modified in place, and
+ * it doesn't propagate up from grandchildren. JUnit XML lives one level deeper
+ * (build/test-results/testDebugUnitTest/TEST-*.xml), so we also stat each
+ * watched dir's first-level subdirs to catch those updates.
  */
 
 const fs = require('fs');
 const path = require('path');
-const chokidar = require('chokidar');
 
-const DISCOVERY_INTERVAL = 5000; // ms
-const DEBOUNCE_DELAY = 500; // ms
+const POLL_INTERVAL = 5000;
+const DISCOVERY_EVERY_N_TICKS = 6; // ~30s at POLL_INTERVAL=5000
 
 function createWatcher(modules, projectPath, onModuleChange, profiles, strategy) {
-  return new ChokidarWatcher(modules, projectPath, onModuleChange, profiles, strategy);
+  return new PollingWatcher(modules, projectPath, onModuleChange, profiles, strategy);
 }
 
-class ChokidarWatcher {
+class PollingWatcher {
   constructor(modules, projectPath, onModuleChange, profiles, strategy) {
     this._onChange = onModuleChange;
-    this._timers = new Map();
-    this._pathToModule = new Map();
-    this._actualWatchDirs = new Set();
     this._root = projectPath;
     this._profiles = profiles;
     this._strategy = strategy;
-    this._knownModules = new Set();
-    this._discoveryTimer = null;
-    this._chokidarWatcher = null;
+    this._modules = new Map();
+    this._tickCount = 0;
+    this._timer = null;
 
     for (const mod of modules) {
-      this._addModuleWatches(mod.name);
+      this._addModule(mod.name);
     }
   }
 
-  _addModuleWatches(moduleName) {
-    if (this._knownModules.has(moduleName)) return false;
-    this._knownModules.add(moduleName);
-
-    const modulePath = this._strategy.resolveModulePath(moduleName, this._root);
-    const wantDirs = this._strategy.getWatchDirs(modulePath, this._profiles);
-
-    let added = false;
-    for (const d of wantDirs) {
-      let target = d;
-      while (true) {
-        try { if (fs.statSync(target).isDirectory()) break; } catch {}
-        const parent = path.dirname(target);
-        if (parent === this._root || parent === target) { target = null; break; }
-        target = parent;
-      }
-      if (target) {
-        this._pathToModule.set(d, { name: moduleName, path: modulePath });
-        if (!this._actualWatchDirs.has(target)) {
-          this._actualWatchDirs.add(target);
-          added = true;
-        }
-      }
-    }
-    return added;
+  _addModule(name) {
+    if (this._modules.has(name)) return false;
+    const modulePath = this._strategy.resolveModulePath(name, this._root);
+    const dirs = [...this._strategy.getWatchDirs(modulePath, this._profiles)];
+    const lastMtime = _maxMtime(dirs);
+    this._modules.set(name, { path: modulePath, dirs, lastMtime });
+    return true;
   }
 
-  _onFileChange(filePath) {
-    let moduleInfo = null;
-    for (const [watchedDir, info] of this._pathToModule) {
-      if (filePath.startsWith(watchedDir)) {
-        moduleInfo = info;
-        break;
+  _tick() {
+    for (const [name, info] of this._modules) {
+      const mtime = _maxMtime(info.dirs);
+      if (mtime !== info.lastMtime) {
+        info.lastMtime = mtime;
+        this._onChange(name, info.path);
       }
     }
-    if (!moduleInfo) return;
-
-    const { name: moduleName, path: modulePath } = moduleInfo;
-    if (this._timers.has(moduleName)) {
-      clearTimeout(this._timers.get(moduleName));
+    if (++this._tickCount >= DISCOVERY_EVERY_N_TICKS) {
+      this._tickCount = 0;
+      this._discoverNewModules();
     }
-    this._timers.set(moduleName, setTimeout(() => {
-      this._timers.delete(moduleName);
-      this._onChange(moduleName, modulePath);
-    }, DEBOUNCE_DELAY));
   }
 
   _discoverNewModules() {
     try {
-      for (const [, moduleName, modulePath] of this._strategy.discoverModules(this._root)) {
-        if (!this._knownModules.has(moduleName)) {
-          if (this._addModuleWatches(moduleName)) {
-            for (const d of this._actualWatchDirs) {
-              this._chokidarWatcher.add(d);
-            }
-          }
-          this._onChange(moduleName, modulePath);
+      for (const [, name, modPath] of this._strategy.discoverModules(this._root)) {
+        if (!this._modules.has(name)) {
+          this._addModule(name);
+          this._onChange(name, modPath);
         }
       }
     } catch {}
   }
 
   start() {
-    const dirs = [...this._actualWatchDirs];
-    if (dirs.length) {
-      this._chokidarWatcher = chokidar.watch(dirs, {
-        ignoreInitial: true,
-        persistent: true,
-        awaitWriteFinish: { stabilityThreshold: 200 },
-      });
-      this._chokidarWatcher.on('all', (_event, filePath) => {
-        this._onFileChange(filePath);
-      });
-    }
-
-    this._discoveryTimer = setInterval(() => this._discoverNewModules(), DISCOVERY_INTERVAL);
+    this._timer = setInterval(() => this._tick(), POLL_INTERVAL);
   }
 
   stop() {
-    if (this._discoveryTimer) {
-      clearInterval(this._discoveryTimer);
-      this._discoveryTimer = null;
+    if (this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
     }
-    for (const timer of this._timers.values()) {
-      clearTimeout(timer);
-    }
-    this._timers.clear();
-    if (this._chokidarWatcher) {
-      this._chokidarWatcher.close();
-      this._chokidarWatcher = null;
+    this._modules.clear();
+  }
+}
+
+// Max mtime across the given dirs and each of their first-level subdirs.
+// Catches both "new file in dir" (dir mtime bumps) and "file replaced in
+// subdir" like JUnit XML under testDebugUnitTest/ (subdir mtime bumps).
+function _maxMtime(dirs) {
+  let max = 0;
+  for (const d of dirs) {
+    let entries;
+    try {
+      const st = fs.statSync(d);
+      if (st.mtimeMs > max) max = st.mtimeMs;
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      try {
+        const sub = fs.statSync(path.join(d, e.name));
+        if (sub.mtimeMs > max) max = sub.mtimeMs;
+      } catch {}
     }
   }
+  return max;
 }
 
 module.exports = { createWatcher };
