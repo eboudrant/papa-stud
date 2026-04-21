@@ -32,8 +32,8 @@ npm run electron # desktop app
 - Supports **Paparazzi**, **Roborazzi**, and **Compose Screenshot Testing** out of the box
 - Custom profile templates for any screenshot testing tool
 - Delta / Toggle / Slider comparison modes with zoom and pan
+- **Accept baseline** — copy the rendered image over the golden with one click (or bulk accept a whole scan)
 - Multi-module Gradle project scanning
-- Real-time file watching (re-scans on test re-run)
 - Video export of failures (requires ffmpeg)
 - Config import / export
 - Dark / light / system theme
