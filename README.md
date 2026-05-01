@@ -33,6 +33,14 @@ npm start        # http://localhost:8770
 npm run electron # desktop app
 ```
 
+## Run with Docker
+
+```bash
+docker compose up --build -d   # http://localhost:8770
+```
+
+Project data (projects, templates, scans) is persisted in the `papastud-data` Docker volume. To point the server at your local Gradle projects, mount them into the container — e.g. `-v ~/code:/code` — and add them by their in-container path (`/code/my-project`).
+
 ## Features
 
 - Supports **Paparazzi**, **Roborazzi**, and **Compose Screenshot Testing** out of the box
