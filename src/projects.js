@@ -6,10 +6,18 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const templates = require('./templates');
 const { readJson, writeJson } = require('./jsonStore');
+
+function expandHome(p) {
+  if (typeof p !== 'string' || !p) return p;
+  if (p === '~') return os.homedir();
+  if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
 
 let DATA_DIR = path.join(process.cwd(), 'data');
 
@@ -58,10 +66,12 @@ function defaultProfiles() {
 // --- Projects ---
 
 function listProjects() {
-  return readJson(projectsPath()) || [];
+  const list = readJson(projectsPath()) || [];
+  return list.map(p => (p && typeof p.path === 'string' ? { ...p, path: expandHome(p.path) } : p));
 }
 
 function addProject(name, projectPath, templateIds, strategy) {
+  projectPath = expandHome(projectPath);
   let profiles;
   if (templateIds && templateIds.length) {
     profiles = [];
@@ -422,6 +432,7 @@ function resetProjects() {
 }
 
 module.exports = {
+  expandHome,
   setDataDir,
   getDataDir,
   listProjects,

@@ -595,7 +595,12 @@ async function _addProject() {
   if (!path) return;
   const checkboxes = document.querySelectorAll('#template-selector input:checked');
   const template_ids = Array.from(checkboxes).map(cb => cb.value);
-  await apiPost('/api/projects', { name: name || undefined, path, template_ids: template_ids.length ? template_ids : undefined });
+  try {
+    await apiPost('/api/projects', { name: name || undefined, path, template_ids: template_ids.length ? template_ids : undefined });
+  } catch (err) {
+    showToast(err.message || 'Failed to add project', 'error');
+    return;
+  }
   _hideAddProject();
   await _loadHome();
 }

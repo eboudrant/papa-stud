@@ -176,8 +176,14 @@ function createRouter() {
   router.post('/api/projects', (req, res) => {
     const body = req.body;
     if (!body || !body.path) return res.status(400).json({ error: 'path required' });
-    const name = body.name || path.basename(body.path);
-    const project = projects.addProject(name, body.path, body.template_ids, body.strategy);
+    const resolved = projects.expandHome(body.path);
+    const shown = resolved !== body.path ? `${body.path} (expanded to ${resolved})` : body.path;
+    let stat;
+    try { stat = fs.statSync(resolved); }
+    catch { return res.status(400).json({ error: `path does not exist: ${shown}` }); }
+    if (!stat.isDirectory()) return res.status(400).json({ error: `path is not a directory: ${shown}` });
+    const name = body.name || path.basename(resolved);
+    const project = projects.addProject(name, resolved, body.template_ids, body.strategy);
     res.status(201).json(project);
   });
 

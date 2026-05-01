@@ -1,9 +1,19 @@
 // @ts-check
 
+async function _throwIfError(res, method, url) {
+  if (res.ok) return;
+  let msg = `${method} ${url}: ${res.status}`;
+  try {
+    const data = await res.json();
+    if (data && data.error) msg = data.error;
+  } catch {}
+  throw new Error(msg);
+}
+
 /** @param {string} url */
 async function apiGet(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`GET ${url}: ${res.status}`);
+  await _throwIfError(res, 'GET', url);
   if (res.status === 204) return null;
   return res.json();
 }
@@ -18,7 +28,7 @@ async function apiPost(url, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`POST ${url}: ${res.status}`);
+  await _throwIfError(res, 'POST', url);
   if (res.status === 204) return null;
   return res.json();
 }
@@ -33,7 +43,7 @@ async function apiPut(url, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`PUT ${url}: ${res.status}`);
+  await _throwIfError(res, 'PUT', url);
   if (res.status === 204) return null;
   return res.json();
 }
@@ -41,7 +51,7 @@ async function apiPut(url, body) {
 /** @param {string} url */
 async function apiDelete(url) {
   const res = await fetch(url, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`DELETE ${url}: ${res.status}`);
+  await _throwIfError(res, 'DELETE', url);
 }
 
 /** Escape a string for safe HTML insertion. */
