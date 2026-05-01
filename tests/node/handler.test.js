@@ -80,4 +80,16 @@ describe('POST /api/projects path validation', () => {
     assert.equal(res.status, 400);
     assert.match(res.data.error, /path required/);
   });
+
+  it('rejects relative path', async () => {
+    const res = await postJson('/api/projects', { path: '../etc' });
+    assert.equal(res.status, 400);
+    assert.match(res.data.error, /absolute path required/);
+  });
+
+  it('rejects bare relative segment', async () => {
+    const res = await postJson('/api/projects', { path: 'some/dir' });
+    assert.equal(res.status, 400);
+    assert.match(res.data.error, /absolute path required/);
+  });
 });
