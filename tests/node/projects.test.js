@@ -152,3 +152,43 @@ describe('one scan per project', () => {
     assert.ok(!fs.existsSync(projects.scanPath(scan2.id)));
   });
 });
+
+describe('home directory expansion', () => {
+  it('expands ~ in addProject path', () => {
+    const proj = projects.addProject('Home', '~/some/dir');
+    assert.equal(proj.path, path.join(os.homedir(), 'some', 'dir'));
+  });
+
+  it('expands bare ~ in addProject path', () => {
+    const proj = projects.addProject('Home', '~');
+    assert.equal(proj.path, os.homedir());
+  });
+
+  it('leaves absolute paths untouched', () => {
+    const proj = projects.addProject('Abs', '/tmp/x');
+    assert.equal(proj.path, '/tmp/x');
+  });
+
+  it('does not expand ~ in middle of path', () => {
+    const proj = projects.addProject('Mid', '/tmp/~weird');
+    assert.equal(proj.path, '/tmp/~weird');
+  });
+
+  it('listProjects expands ~ for legacy stored paths', () => {
+    const raw = path.join(tmpdir, 'projects.json');
+    fs.writeFileSync(raw, JSON.stringify([
+      { id: 'a', name: 'Legacy', path: '~/legacy', profiles: [] },
+    ]));
+    const list = projects.listProjects();
+    assert.equal(list[0].path, path.join(os.homedir(), 'legacy'));
+  });
+
+  it('getProject returns expanded path for legacy stored paths', () => {
+    const raw = path.join(tmpdir, 'projects.json');
+    fs.writeFileSync(raw, JSON.stringify([
+      { id: 'a', name: 'Legacy', path: '~/legacy', profiles: [] },
+    ]));
+    const proj = projects.getProject('a');
+    assert.equal(proj.path, path.join(os.homedir(), 'legacy'));
+  });
+});
