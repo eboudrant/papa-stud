@@ -6,6 +6,7 @@
 - Branch naming: `feat/short-description`, `fix/short-description`, `chore/short-description`, `docs/short-description`, `ci/short-description`.
 - Always ask the user before running `git commit`.
 - Never commit to a branch that has already been merged — verify before committing.
+- **Always branch from a fresh `origin/main`, never from a still-checked-out merged branch.** GitHub squash-merge produces a *new* commit hash on `main`; the local pre-squash commit on the old branch is content-equivalent but a different SHA. Branching off the merged branch carries that orphan commit forward, and the next PR shows the previous PR's diff stacked on top. Always: `git checkout main && git pull --ff-only && git checkout -b <new>` (or rebase onto fresh `origin/main` if you forgot — the orphan will drop out).
 
 ## CHANGES entry
 

@@ -25,6 +25,9 @@ Added one-line Electron specifics bullet: user preferences persist via IPC to JS
 ### `CLAUDE.md`
 Added the fourth `@`-import for `scanning.md`.
 
+### `.claude/rules/dev_workflow.md`
+Added a session-learned rule: always branch from a fresh `origin/main`, never from a still-checked-out merged branch. GitHub squash-merge produces a new commit hash on `main`; the local pre-squash commit is content-equivalent but a different SHA. Branching off the merged branch carries that orphan forward, and the next PR shows the previous PR's diff stacked on top. The first version of this PR fell into exactly that trap — fixed by rebasing onto fresh `origin/main`.
+
 ## Skipped on purpose
 
 - **Toast replacement pattern** — obvious from one read of `static/js/api.js`.
