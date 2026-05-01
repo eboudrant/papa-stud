@@ -40,10 +40,15 @@ Pre-release / build-metadata suffixes aren't supported by the release workflow t
 ### 4. Verify pre-conditions
 
 - Working tree is clean: `git status --porcelain` must be empty.
-- We're on `main` and up to date: `git fetch origin main && git rev-parse HEAD == git rev-parse origin/main`.
+- We're on `main` and up to date: `git fetch origin main && git rev-parse HEAD == git rev-parse origin/main`. Always release **from main**; never from a feature branch.
+- Latest required CI on `origin/main` is green:
+  ```
+  gh api repos/eboudrant/papa-stud/commits/main/check-runs --jq '.check_runs[] | "\(.name): \(.conclusion // .status)"' | sort -u
+  ```
+  Every entry must end in `success`. If anything is `failure`, `cancelled`, `timed_out`, or still `in_progress`, stop — releasing on a broken or unfinished `main` ships untested binaries to the Homebrew tap.
 - The new tag doesn't already exist: `gh release view "v<NEW>"` should return non-zero.
 
-If any check fails, surface the specific issue and stop. Don't try to fix it implicitly.
+If any check fails, surface the specific issue and stop. Don't try to fix it implicitly (the user may want to investigate first — e.g. wait for an in-flight PR, or revert a regression).
 
 ### 5. Confirm with the user
 
