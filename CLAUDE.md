@@ -9,6 +9,7 @@ Durable repo rules for agents and humans. Read these first.
 - @.claude/rules/architecture.md — stack, source layout, Electron specifics
 - @.claude/rules/dev_workflow.md — branches, CHANGES files, PR + auto-merge policy, CodeQL dismissal flow, threat model
 - @.claude/rules/testing.md — unit + screenshot tests, CI gates
+- @.claude/rules/scanning.md — watcher polling, stale-delta heuristic, rescan-preserves-status, result_source
 
 ## User docs
 

@@ -39,3 +39,4 @@ data/                   Runtime data (projects.json, templates.json, scans/)
 - Server binds to `127.0.0.1:0` (random port) in Electron mode.
 - Logs written to `app.getPath('userData')/server.log`.
 - Help menu exposes "Open Log File" and "Open Data Directory".
+- **User preferences (theme, etc.) persist via IPC to JSON files in `userData/`, not via `localStorage`.** `localStorage` is keyed by origin including port; the random port means a fresh "origin" every launch and the value is lost. See `electron/main.js` `themeFilePath()` / `readTheme()` / `writeTheme()` and the `get-theme` / `set-theme` IPC handlers.
