@@ -17,6 +17,6 @@ The `docs/` folder is the GitHub Pages site (https://eboudrant.github.io/papa-st
 
 ## Skills, agents, MCP
 
-- `.claude/skills/` — multi-step procedures (only when worth encapsulating).
+- `.claude/skills/release` — cut a new release (semver-bumps the latest tag, triggers the `Release` workflow with confirmation).
 - `.claude/agents/` — custom subagents (none yet).
 - `.mcp.json` — per-repo MCP servers (none yet).
