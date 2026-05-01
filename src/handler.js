@@ -176,9 +176,17 @@ function createRouter() {
   router.post('/api/projects', (req, res) => {
     const body = req.body;
     if (!body || !body.path) return res.status(400).json({ error: 'path required' });
-    const resolved = projects.expandHome(body.path);
+    const expanded = projects.expandHome(body.path);
+    if (!path.isAbsolute(expanded)) {
+      return res.status(400).json({ error: `absolute path required: ${body.path}` });
+    }
+    const resolved = path.resolve(expanded);
     const shown = resolved !== body.path ? `${body.path} (expanded to ${resolved})` : body.path;
     let stat;
+    // codeql[js/path-injection]: by design — this single-user app lets the user
+    // pick any directory on their machine to scan. Server binds to 127.0.0.1
+    // (Electron) or runs inside a Docker container (no auth). The path is
+    // normalized via expandHome + path.resolve and rejected if not absolute.
     try { stat = fs.statSync(resolved); }
     catch { return res.status(400).json({ error: `path does not exist: ${shown}` }); }
     if (!stat.isDirectory()) return res.status(400).json({ error: `path is not a directory: ${shown}` });
