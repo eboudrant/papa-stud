@@ -185,8 +185,8 @@ function createRouter() {
     let stat;
     // codeql[js/path-injection]: by design — this single-user app lets the user
     // pick any directory on their machine to scan. Server binds to 127.0.0.1
-    // (Electron) or runs inside a Docker container (no auth). The path is
-    // normalized via expandHome + path.resolve and rejected if not absolute.
+    // (Electron only; no remote attacker). The path is normalized via
+    // expandHome + path.resolve and rejected if not absolute.
     try { stat = fs.statSync(resolved); }
     catch { return res.status(400).json({ error: `path does not exist: ${shown}` }); }
     if (!stat.isDirectory()) return res.status(400).json({ error: `path is not a directory: ${shown}` });
