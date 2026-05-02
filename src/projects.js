@@ -46,21 +46,21 @@ function indexPath() { return path.join(scansDir(), 'index.json'); }
 
 // --- Default profiles ---
 
-let _defaultProfiles = null;
+const DEFAULT_TEMPLATE_BY_STRATEGY = {
+  gradle: 'paparazzi',
+  'swift-snapshot': 'swift-snapshot',
+};
 
-function defaultProfiles() {
-  if (_defaultProfiles) return _defaultProfiles;
-  const t = templates.getTemplate('paparazzi');
-  if (t) {
-    _defaultProfiles = [templates.templateToProfile(t)];
-  } else {
-    _defaultProfiles = [{
-      name: 'Paparazzi',
-      failures_dir: 'build/paparazzi/failures',
-      golden_patterns: ['src/test/snapshots/images/{name}.png'],
-    }];
-  }
-  return _defaultProfiles;
+function defaultProfiles(strategy = 'gradle') {
+  const tid = DEFAULT_TEMPLATE_BY_STRATEGY[strategy] || 'paparazzi';
+  const t = templates.getTemplate(tid);
+  if (t) return [templates.templateToProfile(t)];
+  // Fallback if templates aren't initialised yet (early server boot edge case).
+  return [{
+    name: 'Paparazzi',
+    failures_dir: 'build/paparazzi/failures',
+    golden_patterns: ['src/test/snapshots/images/{name}.png'],
+  }];
 }
 
 // --- Projects ---
@@ -70,7 +70,7 @@ function listProjects() {
   return list.map(p => (p && typeof p.path === 'string' ? { ...p, path: expandHome(p.path) } : p));
 }
 
-function addProject(name, projectPath, templateIds, strategy) {
+function addProject(name, projectPath, templateIds, strategy, opts = {}) {
   projectPath = expandHome(projectPath);
   let profiles;
   if (templateIds && templateIds.length) {
@@ -80,7 +80,7 @@ function addProject(name, projectPath, templateIds, strategy) {
       if (t) profiles.push(templates.templateToProfile(t));
     }
   } else {
-    profiles = JSON.parse(JSON.stringify(defaultProfiles()));
+    profiles = JSON.parse(JSON.stringify(defaultProfiles(strategy || 'gradle')));
   }
 
   const projects = readJson(projectsPath()) || [];
@@ -92,6 +92,7 @@ function addProject(name, projectPath, templateIds, strategy) {
     strategy: strategy || 'gradle',
     profiles,
   };
+  if (opts.xcresult_path) project.xcresult_path = opts.xcresult_path;
   projects.push(project);
   writeJson(projectsPath(), projects);
   return project;
@@ -116,6 +117,7 @@ function updateProjectProfiles(projectId, profiles) {
 function deleteProject(projectId) {
   const projects = readJson(projectsPath()) || [];
   writeJson(projectsPath(), projects.filter(p => p.id !== projectId));
+  fs.rmSync(path.join(DATA_DIR, 'cache', 'xcresult', sanitizeId(projectId)), { recursive: true, force: true });
 }
 
 // --- Scan Index ---

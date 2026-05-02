@@ -17,7 +17,14 @@ async function showHome() {
         <div id="add-project-form" class="add-form" style="display:none">
           <div class="add-form-row">
             <input type="text" id="project-name" placeholder="Project name (optional)" class="input">
-            <input type="text" id="project-path" placeholder="/path/to/gradle/project" class="input input-wide">
+            <input type="text" id="project-path" placeholder="/path/to/project" class="input input-wide">
+          </div>
+          <div class="add-form-row">
+            <select id="project-strategy" class="input" onchange="_onStrategyChange()">
+              <option value="gradle">Gradle (Paparazzi / Roborazzi / Compose Screenshot)</option>
+              <option value="swift-snapshot">swift-snapshot-testing (iOS / Xcode)</option>
+            </select>
+            <input type="text" id="project-xcresult-path" placeholder="Optional: path to .xcresult (auto-detect if empty)" class="input input-wide" style="display:none">
           </div>
           <div id="template-selector" class="template-selector"></div>
           <div class="add-form-row">
@@ -571,11 +578,26 @@ function _aggregateSnapshotStats(modules) {
 
 async function _showAddProject() {
   document.getElementById('add-project-form').style.display = 'block';
-  const sel = document.getElementById('template-selector');
+  document.getElementById('project-strategy').value = 'gradle';
+  document.getElementById('project-xcresult-path').value = '';
+  document.getElementById('project-xcresult-path').style.display = 'none';
   const tmps = await apiGet('/api/templates');
-  sel.innerHTML = tmps.map(t => `
+  _addProjectTemplates = tmps;
+  _renderTemplateSelector('gradle');
+}
+
+let _addProjectTemplates = [];
+
+function _renderTemplateSelector(strategy) {
+  const sel = document.getElementById('template-selector');
+  const filtered = _addProjectTemplates.filter(t => {
+    if (strategy === 'swift-snapshot') return t.tool === 'swift-snapshot';
+    return t.tool !== 'swift-snapshot';
+  });
+  const defaultId = strategy === 'swift-snapshot' ? 'swift-snapshot' : 'paparazzi';
+  sel.innerHTML = filtered.map(t => `
     <label class="template-card">
-      <input type="checkbox" value="${escAttr(t.id)}" ${t.id === 'paparazzi' ? 'checked' : ''}>
+      <input type="checkbox" value="${escAttr(t.id)}" ${t.id === defaultId ? 'checked' : ''}>
       <div class="template-info">
         <span class="template-name">${escHtml(t.name)}</span>
         <span class="template-tool">${escHtml(t.tool)}</span>
@@ -585,6 +607,12 @@ async function _showAddProject() {
   `).join('');
 }
 
+function _onStrategyChange() {
+  const strategy = document.getElementById('project-strategy').value;
+  document.getElementById('project-xcresult-path').style.display = strategy === 'swift-snapshot' ? '' : 'none';
+  _renderTemplateSelector(strategy);
+}
+
 function _hideAddProject() {
   document.getElementById('add-project-form').style.display = 'none';
 }
@@ -592,11 +620,19 @@ function _hideAddProject() {
 async function _addProject() {
   const name = document.getElementById('project-name').value.trim();
   const path = document.getElementById('project-path').value.trim();
+  const strategy = document.getElementById('project-strategy').value;
+  const xcresultPath = document.getElementById('project-xcresult-path').value.trim();
   if (!path) return;
   const checkboxes = document.querySelectorAll('#template-selector input:checked');
   const template_ids = Array.from(checkboxes).map(cb => cb.value);
   try {
-    await apiPost('/api/projects', { name: name || undefined, path, template_ids: template_ids.length ? template_ids : undefined });
+    await apiPost('/api/projects', {
+      name: name || undefined,
+      path,
+      strategy,
+      xcresult_path: xcresultPath || undefined,
+      template_ids: template_ids.length ? template_ids : undefined,
+    });
   } catch (err) {
     showToast(err.message || 'Failed to add project', 'error');
     return;

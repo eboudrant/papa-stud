@@ -4,11 +4,21 @@
  */
 
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const projects = require('./projects');
 const { scanProjectIncrementalSync, processSingleModule } = require('./scanner');
 const { createWatcher } = require('./watcher');
 const { getStrategy } = require('./strategies');
+
+function projectCacheDir(projectId) {
+  return path.join(projects.getDataDir(), 'cache', 'xcresult', projectId);
+}
+
+function resetCacheDir(dir) {
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+}
 
 const DEBUG = process.env.PAPASTUD_DEBUG === '1';
 const log = (...args) => { if (DEBUG) console.log(...args); };
@@ -17,8 +27,9 @@ const jobs = new Map();
 const watchers = new Map(); // scanId -> watcher
 const JOB_TTL = 300_000; // 5 minutes in ms
 
-function startScan(projectId, name, projectPath, profiles, strategyName) {
+function startScan(project) {
   cleanupOldJobs();
+  const { id: projectId, name, path: projectPath, profiles, strategy: strategyName } = project;
   log(`[scan] starting scan for "${name}" at ${projectPath} (${profiles?.length || 0} profiles, strategy: ${strategyName || 'gradle'})`);
   const jobId = crypto.randomBytes(4).toString('hex');
   let cancelled = false;
@@ -41,7 +52,7 @@ function startScan(projectId, name, projectPath, profiles, strategyName) {
   jobs.set(jobId, job);
 
   // Run scan asynchronously via setImmediate chunks
-  setImmediate(() => runScan(jobId, projectId, name, projectPath, profiles, strategyName));
+  setImmediate(() => runScan(jobId, project));
   return jobId;
 }
 
@@ -82,10 +93,19 @@ function cleanupOldJobs() {
 // Periodic cleanup so completed jobs don't accumulate in long-running servers
 setInterval(cleanupOldJobs, JOB_TTL).unref();
 
-function runScan(jobId, projectId, name, projectPath, profiles, strategyName) {
+function runScan(jobId, project) {
   const job = jobs.get(jobId);
   if (!job) return;
-  const gen = scanProjectIncrementalSync(projectPath, job._cancelFn, profiles, strategyName);
+  const { id: projectId, name, path: projectPath, profiles, strategy: strategyName } = project;
+  const strategy = getStrategy(strategyName);
+  const opts = {};
+  if (typeof strategy.parseProjectFailures === 'function') {
+    const cacheDir = projectCacheDir(projectId);
+    resetCacheDir(cacheDir);
+    opts.cacheDir = cacheDir;
+    opts.project = project;
+  }
+  const gen = scanProjectIncrementalSync(projectPath, job._cancelFn, profiles, strategyName, opts);
   const processNext = () => {
     try {
       const { value, done } = gen.next();
@@ -95,7 +115,9 @@ function runScan(jobId, projectId, name, projectPath, profiles, strategyName) {
         return;
       }
       const [phase, data] = value;
-      if (phase === 'discovering') {
+      if (phase === 'parsing') {
+        job.status = 'parsing';
+      } else if (phase === 'discovering') {
         job.modules_found = data.found;
         job.current_module = data.current_dir;
       } else if (phase === 'discovered') {
