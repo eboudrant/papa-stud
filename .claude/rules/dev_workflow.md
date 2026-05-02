@@ -66,6 +66,26 @@ Why this change exists.
 
 Single-user local tool. Server binds `127.0.0.1` (Electron) or runs in a local Docker container; there is no remote attacker. "Web app" CodeQL rules (path-injection, missing rate-limiting, etc.) typically don't apply — dismiss with reference to this section.
 
+## Screenshot tests before pushing UI changes
+
+Any change to `static/` (HTML, CSS, JS) likely shifts pixels and breaks the baselines. **Before `git push`**, run the Docker screenshot tests locally — the same image CI uses, so a local pass means CI will pass:
+
+```
+docker build -f Dockerfile.test -t papastud-test .
+docker run --rm -e CI=true papastud-test npx playwright test
+```
+
+If they fail intentionally (the diff is the new desired baseline), regenerate and commit:
+
+```
+docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots
+git add tests/screenshots && git commit -m "chore: refresh screenshot baselines"
+```
+
+**Don't push UI changes without doing one of those two.** Pushing → CI failing → opening artifacts → updating baselines is the slow path; the local docker run takes ~1 min and avoids the round-trip.
+
+`npm test` only covers unit tests — it does **not** include Playwright. Running it locally is not a substitute for the docker screenshot run.
+
 ## Electron after code changes
 
 After modifying any code that runs in Electron (`electron/`, `src/`, `static/`), restart the Electron app so the user can re-test in the UI:

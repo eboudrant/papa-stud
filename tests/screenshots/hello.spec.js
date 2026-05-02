@@ -14,7 +14,7 @@ test('add project form toggles', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.section-header button:has-text("Add Project")')).toBeVisible({ timeout: 10000 });
   await page.click('.section-header button:has-text("Add Project")');
-  await expect(page.locator('input[placeholder*="path"]')).toBeVisible();
+  await expect(page.locator('input#project-path')).toBeVisible();
   await expect(page.locator('.template-card')).toHaveCount(3, { timeout: 5000 });
   await expect(page).toHaveScreenshot('home-add-project.png');
 });
