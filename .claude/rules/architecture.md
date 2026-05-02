@@ -5,16 +5,19 @@
 - **Backend:** Node.js, Express 5, chokidar for filesystem watching.
 - **Frontend:** Vanilla HTML/CSS/JS, light theme, system fonts — no build step.
 - **Desktop:** Electron (electron-forge for packaging), hidden title bar with traffic lights.
-- **Docker:** `node:24-slim`, non-root `papastud` user, port **8770**.
-- **Data volume:** `/app/data` (persistent via `papastud-data` Docker volume).
 
 ## Running
 
 ```
-docker compose up --build -d   # http://localhost:8770
 npm run electron               # desktop app, random port
-npm start                      # http://localhost:8770
+npm start                      # http://localhost:8770 (dev only)
 ```
+
+## No Docker for the app
+
+Papa Stud does **not** ship as a Docker image. Electron is the delivery mechanism; `npm start` is for local dev. Don't reintroduce a `Dockerfile` / `docker-compose.yml` for running the server — file paths the user wants to scan live on the host, mounting them into a container is friction without value, and Electron already handles single-user-local distribution.
+
+`Dockerfile.test` is the **one** Docker file we keep — it's load-bearing for pixel-consistent Playwright screenshot baselines (rendering drifts across host environments otherwise). See `.claude/rules/testing.md`.
 
 ## Source layout
 

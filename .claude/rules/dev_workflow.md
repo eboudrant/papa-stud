@@ -64,7 +64,7 @@ Why this change exists.
 
 ## Threat model (for dismissals)
 
-Single-user local tool. Server binds `127.0.0.1` (Electron) or runs in a local Docker container; there is no remote attacker. "Web app" CodeQL rules (path-injection, missing rate-limiting, etc.) typically don't apply — dismiss with reference to this section.
+Single-user local tool. Server binds `127.0.0.1` in Electron; there is no remote attacker. "Web app" CodeQL rules (path-injection, missing rate-limiting, etc.) typically don't apply — dismiss with reference to this section.
 
 ## Electron after code changes
 
