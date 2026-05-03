@@ -50,6 +50,19 @@ const BUILTIN_TEMPLATES = [
     delta_suffix: '',
     actual_suffix: '',
   },
+  {
+    id: 'swift-snapshot',
+    name: 'swift-snapshot-testing',
+    tool: 'swift-snapshot',
+    builtin: true,
+    description: 'Point-Free',
+    failures_dir: '',
+    golden_dir: '__Snapshots__',
+    golden_patterns: ['__Snapshots__/**/{name}.png'],
+    delta_prefix: '',
+    delta_suffix: '',
+    actual_suffix: '',
+  },
 ];
 
 function customPath() {

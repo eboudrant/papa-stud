@@ -78,20 +78,15 @@ function createRouter() {
     // Resolve symlinks to prevent traversal via symlink targets
     let real;
     try { real = fs.realpathSync(filePath); } catch { return res.status(404).json({ error: 'not found' }); }
-    // Find which project root this path belongs to
-    const allProjects = projects.listProjects();
-    let projectRoot = null;
-    for (const p of allProjects) {
-      let root;
-      try { root = fs.realpathSync(p.path); } catch { continue; }
-      if (real.startsWith(root + path.sep)) {
-        projectRoot = root;
-        break;
-      }
+    // Allowed roots: any project path + the data/cache dir (xcresult attachments
+    // live there for swift-snapshot strategies).
+    const roots = [];
+    for (const p of projects.listProjects()) {
+      try { roots.push(fs.realpathSync(p.path)); } catch {}
     }
-    if (!projectRoot) return res.status(403).json({ error: 'forbidden' });
-    const relativePath = path.relative(projectRoot, real);
-    if (relativePath.startsWith('..')) return res.status(403).json({ error: 'forbidden' });
+    try { roots.push(fs.realpathSync(path.join(projects.getDataDir(), 'cache'))); } catch {}
+    const allowedRoot = roots.find(r => real.startsWith(r + path.sep));
+    if (!allowedRoot) return res.status(403).json({ error: 'forbidden' });
     res.sendFile(real);
   });
 
@@ -191,7 +186,9 @@ function createRouter() {
     catch { return res.status(400).json({ error: `path does not exist: ${shown}` }); }
     if (!stat.isDirectory()) return res.status(400).json({ error: `path is not a directory: ${shown}` });
     const name = body.name || path.basename(resolved);
-    const project = projects.addProject(name, resolved, body.template_ids, body.strategy);
+    const project = projects.addProject(name, resolved, body.template_ids, body.strategy, {
+      xcresult_path: body.xcresult_path,
+    });
     res.status(201).json(project);
   });
 
@@ -205,9 +202,7 @@ function createRouter() {
   router.post('/api/projects/:id/scan', (req, res) => {
     const project = projects.getProject(req.params.id);
     if (!project) return res.status(404).json({ error: 'project not found' });
-    const jobId = scanJobs.startScan(
-      req.params.id, project.name, project.path, project.profiles, project.strategy
-    );
+    const jobId = scanJobs.startScan(project);
     res.status(202).json({ jobId });
   });
 

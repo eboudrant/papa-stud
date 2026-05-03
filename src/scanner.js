@@ -19,20 +19,33 @@ const MTIME_CLUSTER_TOLERANCE = 60.0;
 
 const { getStrategy } = require('./strategies');
 
-function scanProject(projectPath, strategyName) {
+function scanProject(projectPath, strategyName, opts = {}) {
   const result = { modules: [], failures: [] };
-  for (const [phase, data] of scanProjectIncrementalSync(projectPath, null, null, strategyName)) {
+  for (const [phase, data] of scanProjectIncrementalSync(projectPath, null, null, strategyName, opts)) {
     if (phase === 'complete') return data;
   }
   return result;
 }
 
-function* scanProjectIncrementalSync(projectPath, cancelFn, profiles, strategyName) {
+function* scanProjectIncrementalSync(projectPath, cancelFn, profiles, strategyName, opts = {}) {
   const root = projectPath;
   const strategy = getStrategy(strategyName);
 
+  // Strategy-driven path: one global parse (e.g. xcresult) returns failures
+  // pre-bucketed by module, plus the module list — so we skip a second
+  // discoverModules walk.
+  let precomputed = null;
+  if (typeof strategy.parseProjectFailures === 'function' && opts.cacheDir) {
+    yield ['parsing', { source: 'strategy' }];
+    precomputed = strategy.parseProjectFailures(root, opts.project || null, opts.cacheDir);
+  }
+
+  const moduleIter = precomputed && precomputed.modules
+    ? precomputed.modules
+    : strategy.discoverModules(root);
+
   const discovered = [];
-  for (const moduleInfo of strategy.discoverModules(root)) {
+  for (const moduleInfo of moduleIter) {
     discovered.push(moduleInfo);
     yield ['discovering', { found: discovered.length, current_dir: moduleInfo[1] }];
   }
@@ -47,7 +60,9 @@ function* scanProjectIncrementalSync(projectPath, cancelFn, profiles, strategyNa
     }
 
     const [failuresDir, moduleName, modulePath] = discovered[i];
-    const [moduleData, moduleFailures] = processSingleModule(failuresDir, moduleName, modulePath, profiles, strategyName);
+    const [moduleData, moduleFailures] = precomputed
+      ? processModuleFromPrecomputed(moduleName, modulePath, profiles, precomputed, failuresDir)
+      : processSingleModule(failuresDir, moduleName, modulePath, profiles, strategyName);
     modules.push(moduleData);
     if (moduleFailures.length) failures.push(...moduleFailures);
 
@@ -59,6 +74,34 @@ function* scanProjectIncrementalSync(projectPath, cancelFn, profiles, strategyNa
   }
 
   yield ['complete', { modules, failures }];
+}
+
+function processModuleFromPrecomputed(moduleName, modulePath, profiles, precomputed, failuresDir) {
+  const moduleFailures = precomputed.byModule.get(moduleName) || [];
+  const profileCounts = {};
+  for (const f of moduleFailures) {
+    profileCounts[f.profile] = (profileCounts[f.profile] || 0) + 1;
+  }
+
+  let totalSnapshots = 0;
+  let goldenPath = modulePath;
+  if (profiles && profiles.length) {
+    for (const p of profiles) {
+      if (p.golden_dir) totalSnapshots += countPngsRecursive(path.join(modulePath, p.golden_dir));
+    }
+    if (profiles[0].golden_dir) goldenPath = path.join(modulePath, profiles[0].golden_dir);
+  }
+
+  const moduleData = {
+    name: moduleName,
+    failures_path: failuresDir || null,
+    golden_path: goldenPath,
+    failure_count: moduleFailures.length,
+    snapshot_count: totalSnapshots,
+    profile_counts: profileCounts,
+    test_stats: precomputed.stats,
+  };
+  return [moduleData, moduleFailures];
 }
 
 function processSingleModule(failuresDir, moduleName, modulePath, profiles, strategyName) {
@@ -311,6 +354,7 @@ module.exports = {
   scanProject,
   scanProjectIncrementalSync,
   processSingleModule,
+  processModuleFromPrecomputed,
   deltaToBase,
   resolveGolden,
   detectCurrentFailures,

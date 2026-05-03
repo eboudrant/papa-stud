@@ -195,12 +195,26 @@ function _renderDetail(scanId) {
   }
 
   if (_viewMode === 'delta') {
-    viewContent = deltaSrc
-      ? `<div class="detail-fullview">
-          <div class="detail-view-area" id="view-area"><img src="${deltaSrc}" id="detail-img"></div>
-          ${zoomBar}
-        </div>`
-      : '<div class="pane-empty">No delta image</div>';
+    // For tools whose delta is a raw pixel-diff (swift-snapshot), compose the
+    // 3-panel strip client-side so reviewers see expected/diff/actual at once,
+    // matching Roborazzi/Paparazzi's already-composited delta.
+    const stripDelta = f.delta_kind === 'pixel-diff' && goldenSrc && deltaSrc;
+    if (stripDelta) {
+      viewContent = `<div class="detail-fullview">
+          <div class="delta-strip">
+            <div class="delta-strip-cell"><div class="delta-strip-label">Expected</div><img src="${goldenSrc}"></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Diff</div><img src="${deltaSrc}"></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Actual</div><img src="${actualSrc}"></div>
+          </div>
+        </div>`;
+    } else {
+      viewContent = deltaSrc
+        ? `<div class="detail-fullview">
+            <div class="detail-view-area" id="view-area"><img src="${deltaSrc}" id="detail-img"></div>
+            ${zoomBar}
+          </div>`
+        : '<div class="pane-empty">No delta image</div>';
+    }
   } else if (_viewMode === 'toggle') {
     const src = _toggleShowing === 'golden' ? goldenSrc : effectiveActual;
     const title = _toggleShowing === 'golden' ? 'Expected (Golden)' : (actualSrc ? 'Actual' : 'Delta');

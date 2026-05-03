@@ -5,9 +5,10 @@
  */
 
 const gradle = require('./gradle');
+const swiftSnapshot = require('./swift-snapshot');
 
 const DEFAULT_STRATEGY = 'gradle';
-const strategies = { gradle };
+const strategies = { gradle, 'swift-snapshot': swiftSnapshot };
 
 function getStrategy(name) {
   const key = name || DEFAULT_STRATEGY;
