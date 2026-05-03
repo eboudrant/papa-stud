@@ -65,7 +65,7 @@ function classifyAttachment(humanName) {
   const noExt = (humanName || '').replace(/\.[^.]+$/, '');
   const m = /^(reference|failure|difference)_\d+_(.+)$/.exec(noExt);
   if (m) return { role: m[1].toLowerCase(), groupKey: m[2] };
-  return { role: 'other', groupKey: noExt };
+  return { role: 'other', groupKey: null };
 }
 
 // xcresulttool exports attachments as bare UUIDs; rename so /api/images sees
@@ -87,7 +87,6 @@ function groupManifestByTest(manifest, attachmentsDir) {
       const raw = path.join(attachmentsDir, a.exportedFileName);
       return {
         exportedFile: ensureExtension(raw, a.suggestedHumanReadableName),
-        humanName: a.suggestedHumanReadableName,
         role: cls.role,
         groupKey: cls.groupKey,
         timestamp: a.timestamp || 0,
@@ -110,7 +109,6 @@ function pairAttachmentsForTest(items) {
     if (!triple.failure) continue;
     paired.push({
       actualPath: triple.failure.exportedFile,
-      referencePath: triple.reference?.exportedFile || null,
       differencePath: triple.difference?.exportedFile || null,
       timestamp: triple.failure.timestamp,
     });

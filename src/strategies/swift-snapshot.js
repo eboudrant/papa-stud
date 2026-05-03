@@ -70,8 +70,7 @@ function parseTestIdentifier(testId, fallbackName) {
   return { className, methodName: last, preset: null };
 }
 
-// Pure: pair parsed xcresult failures with on-disk goldens. Extracted so tests
-// can drive the bucketing without spawning xcrun.
+// Pair parsed xcresult failures with on-disk goldens.
 function bucketFailures(failures, modules, mtime) {
   // Build className → module bucket once. Multiple modules with the same class
   // name (rare) — first match wins.
@@ -84,6 +83,14 @@ function bucketFailures(failures, modules, mtime) {
         classToModule.set(d.name, { snapDir, moduleName, modulePath });
       }
     }
+  }
+
+  // A single failed test method commonly fans out to dozens of preset
+  // failures (one assertion per variant), so cache the dir listing.
+  const classDirCache = new Map();
+  function readClassDir(dir) {
+    if (!classDirCache.has(dir)) classDirCache.set(dir, fs.readdirSync(dir));
+    return classDirCache.get(dir);
   }
 
   const byModule = new Map();
@@ -99,7 +106,7 @@ function bucketFailures(failures, modules, mtime) {
     // so we pair failure i → sorted golden i.
     const classDir = bucket ? path.join(bucket.snapDir, className) : null;
     const goldenCandidates = classDir
-      ? fs.readdirSync(classDir).filter(f => f.endsWith('.png') && f.startsWith(`${methodName}.`)).sort()
+      ? readClassDir(classDir).filter(f => f.endsWith('.png') && f.startsWith(`${methodName}.`)).sort()
       : [];
 
     failure.paired.forEach((pair, idx) => {

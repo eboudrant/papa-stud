@@ -198,7 +198,7 @@ function _renderDetail(scanId) {
     // For tools whose delta is a raw pixel-diff (swift-snapshot), compose the
     // 3-panel strip client-side so reviewers see expected/diff/actual at once,
     // matching Roborazzi/Paparazzi's already-composited delta.
-    const stripDelta = f.delta_kind === 'pixel-diff' && goldenSrc && actualSrc && deltaSrc;
+    const stripDelta = f.delta_kind === 'pixel-diff' && goldenSrc && deltaSrc;
     if (stripDelta) {
       viewContent = `<div class="detail-fullview">
           <div class="delta-strip">

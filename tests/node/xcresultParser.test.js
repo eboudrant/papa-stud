@@ -98,7 +98,7 @@ describe('pairAttachmentsForTest', () => {
     assert.equal(paired.length, 2);
     const u1 = paired.find(p => p.actualPath === '/c/f1.png');
     assert.deepEqual(u1, {
-      actualPath: '/c/f1.png', referencePath: '/c/r1.png', differencePath: '/c/d1.png',
+      actualPath: '/c/f1.png', differencePath: '/c/d1.png',
       timestamp: 100,
     });
     assert.equal(paired.find(p => p.actualPath === '/c/f2.png').differencePath, null);

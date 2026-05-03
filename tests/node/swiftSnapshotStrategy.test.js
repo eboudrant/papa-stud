@@ -157,6 +157,8 @@ describe('bucketFailures', () => {
     assert.equal(rows[1].golden_path, path.join(tmpRoot, 'Tests/M/__Snapshots__/GreetingTests/testFoo.2.png'));
     assert.equal(rows[0].has_golden, true);
     assert.equal(rows[1].has_golden, true);
+    assert.equal(rows[0].filename, 'GreetingTests/testFoo.1.png');
+    assert.equal(rows[0].snapshot_name, 'testFoo.1');
   });
 
   it('marks rows missing a golden when failures outnumber recorded snapshots', () => {
@@ -169,6 +171,8 @@ describe('bucketFailures', () => {
     assert.equal(rows[0].has_golden, true);
     assert.equal(rows[1].has_golden, false);
     assert.equal(rows[1].golden_path, null);
+    assert.equal(rows[1].filename, 'GreetingTests/testFoo.png');
+    assert.equal(rows[1].snapshot_name, 'testFoo');
   });
 
   it('buckets failures whose class is not on disk under :unknown with no golden', () => {
