@@ -373,6 +373,29 @@ select.input { appearance: auto; }
 .label-hint { font-weight: 400; text-transform: none; color: rgba(255,255,255,0.5); }
 .size-warning { font-size: 11px; color: var(--warning); background: var(--warning-light); padding: 2px 8px; border-radius: 4px; margin-left: auto; }
 
+/* Strip delta — used when the underlying tool's "delta" is a raw pixel-diff
+   (e.g. swift-snapshot-testing). Composes Expected | Diff | Actual side by
+   side so reviewers see the same at-a-glance comparison Roborazzi/Paparazzi
+   already provide as a single image. */
+.delta-strip {
+  flex: 1; min-height: 0; background: var(--bg-inset);
+  display: flex; gap: 8px; padding: 8px; overflow: hidden;
+}
+.delta-strip-cell {
+  flex: 1 1 0; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px; overflow: hidden;
+}
+.delta-strip-cell img {
+  flex: 1; min-height: 0; max-width: 100%; max-height: 100%;
+  object-fit: contain; display: block; margin: 0 auto;
+}
+.delta-strip-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  color: var(--text-dim); text-align: center; flex: 0 0 auto;
+}
+
 /* Slider mode */
 .slider-viewport {
   flex: 1; min-height: 0; position: relative; overflow: hidden;

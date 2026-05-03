@@ -70,16 +70,9 @@ function parseTestIdentifier(testId, fallbackName) {
   return { className, methodName: last, preset: null };
 }
 
-function parseProjectFailures(projectRoot, project, cacheDir) {
-  const xcresultPath = locateXcresult(projectRoot, project);
-  if (!xcresultPath) {
-    return { stats: null, byModule: new Map(), modules: [], mtime: 0, xcresultPath: null };
-  }
-
-  const { stats, failures, mtime } = parseXcresult(xcresultPath, cacheDir);
-
-  const modules = [...discoverModules(projectRoot)];
-
+// Pure: pair parsed xcresult failures with on-disk goldens. Extracted so tests
+// can drive the bucketing without spawning xcrun.
+function bucketFailures(failures, modules, mtime) {
   // Build className → module bucket once. Multiple modules with the same class
   // name (rare) — first match wins.
   const classToModule = new Map();
@@ -95,44 +88,62 @@ function parseProjectFailures(projectRoot, project, cacheDir) {
 
   const byModule = new Map();
   for (const failure of failures) {
-    const { className, methodName, preset } = parseTestIdentifier(failure.testIdentifier, failure.name);
+    const { className, methodName } = parseTestIdentifier(failure.testIdentifier, failure.name);
     if (!className) continue;
 
     const bucket = classToModule.get(className);
     const moduleName = bucket ? bucket.moduleName : ':unknown';
 
-    for (const pair of failure.paired) {
-      const filename = preset
-        ? `${className}/${methodName}.${preset}.png`
+    // Goldens on disk: `<method>.<N>.png` (per-call counter from 1), or
+    // `<method>.<preset>.<N>.png`. The xcresult doesn't say which call failed,
+    // so we pair failure i → sorted golden i.
+    const classDir = bucket ? path.join(bucket.snapDir, className) : null;
+    const goldenCandidates = classDir
+      ? fs.readdirSync(classDir).filter(f => f.endsWith('.png') && f.startsWith(`${methodName}.`)).sort()
+      : [];
+
+    failure.paired.forEach((pair, idx) => {
+      const goldenName = goldenCandidates[idx] || null;
+      const goldenPath = goldenName ? path.join(classDir, goldenName) : null;
+      const filename = goldenName
+        ? `${className}/${goldenName}`
         : `${className}/${methodName}.png`;
 
-      const goldenPath = bucket
-        ? path.join(bucket.snapDir, className, path.basename(filename))
-        : null;
-      const hasGolden = goldenPath ? fs.existsSync(goldenPath) : false;
-
-      const row = {
+      if (!byModule.has(moduleName)) byModule.set(moduleName, []);
+      byModule.get(moduleName).push({
         module: moduleName,
         profile: 'swift-snapshot',
         filename,
         delta_path: pair.differencePath || null,
+        // Roborazzi/Paparazzi composite expected/diff/actual into the delta;
+        // swift-snapshot emits a raw pixel-XOR. The UI strips this kind into
+        // a 3-panel layout client-side.
+        delta_kind: 'pixel-diff',
         actual_path: pair.actualPath,
-        golden_path: hasGolden ? goldenPath : null,
+        golden_path: goldenPath,
         package: bucket ? bucket.moduleName : '',
         class_name: className,
         method: methodName,
-        snapshot_name: preset || methodName,
+        snapshot_name: goldenName ? goldenName.replace(/\.png$/, '') : methodName,
         status: 'pending',
         diff_pct: null,
-        has_golden: hasGolden,
+        has_golden: !!goldenPath,
         has_actual: !!pair.actualPath,
         mtime: pair.timestamp || mtime,
-      };
-      if (!byModule.has(moduleName)) byModule.set(moduleName, []);
-      byModule.get(moduleName).push(row);
-    }
+      });
+    });
   }
+  return byModule;
+}
 
+function parseProjectFailures(projectRoot, project, cacheDir) {
+  const xcresultPath = locateXcresult(projectRoot, project);
+  if (!xcresultPath) {
+    return { stats: null, byModule: new Map(), modules: [], mtime: 0, xcresultPath: null };
+  }
+  const { stats, failures, mtime } = parseXcresult(xcresultPath, cacheDir);
+  const modules = [...discoverModules(projectRoot)];
+  const byModule = bucketFailures(failures, modules, mtime);
   return { stats, byModule, modules, mtime, xcresultPath };
 }
 
@@ -143,6 +154,7 @@ module.exports = {
   getWatchDirs,
   resolveModulePath,
   parseProjectFailures,
+  bucketFailures,
   locateXcresult,
   parseTestIdentifier,
   usesJunit,

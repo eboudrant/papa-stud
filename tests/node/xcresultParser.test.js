@@ -1,8 +1,12 @@
-const { describe, it } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const {
   walkTestNodes,
   classifyAttachment,
+  ensureExtension,
   groupManifestByTest,
   pairAttachmentsForTest,
 } = require('../../src/xcresultParser');
@@ -43,19 +47,20 @@ describe('walkTestNodes', () => {
 });
 
 describe('classifyAttachment', () => {
-  it('classifies a single failure attachment', () => {
-    assert.deepEqual(classifyAttachment('testVariants.normal.failure'), { role: 'failure', baseName: 'testVariants.normal', index: 1 });
-  });
-  it('extracts numeric index for failure-N', () => {
-    assert.deepEqual(classifyAttachment('testVariants.normal.failure-2'), { role: 'failure', baseName: 'testVariants.normal', index: 2 });
+  it('parses Xcode flattened naming <role>_<pos>_<uuid>.png', () => {
+    assert.deepEqual(
+      classifyAttachment('failure_1_6C3C5C0C-0D82-443A-A351-8C1C2EC10E76.png'),
+      { role: 'failure', groupKey: '6C3C5C0C-0D82-443A-A351-8C1C2EC10E76' },
+    );
   });
   it('classifies reference and difference', () => {
-    assert.equal(classifyAttachment('foo.reference').role, 'reference');
-    assert.equal(classifyAttachment('foo.difference-3').role, 'difference');
-    assert.equal(classifyAttachment('foo.difference-3').index, 3);
+    assert.equal(classifyAttachment('reference_0_AAAA-BBBB.png').role, 'reference');
+    assert.equal(classifyAttachment('difference_2_AAAA-BBBB.png').role, 'difference');
   });
-  it('falls back to other for unknown names', () => {
-    assert.equal(classifyAttachment('foo.bar').role, 'other');
+  it('returns role=other for the issue description', () => {
+    assert.equal(classifyAttachment('Complete Issue Description.txt').role, 'other');
+  });
+  it('returns role=other for an empty name', () => {
     assert.equal(classifyAttachment('').role, 'other');
   });
 });
@@ -66,49 +71,77 @@ describe('groupManifestByTest', () => {
       {
         testIdentifier: 'A/test1()',
         attachments: [
-          { exportedFileName: 'a-fail-1.png', suggestedHumanReadableName: 'test1.failure-1', isAssociatedWithFailure: true },
-          { exportedFileName: 'a-ref-1.png', suggestedHumanReadableName: 'test1.reference-1', isAssociatedWithFailure: true },
-        ],
-      },
-      {
-        testIdentifier: 'B/test2()',
-        attachments: [
-          { exportedFileName: 'b-fail.png', suggestedHumanReadableName: 'test2.failure', isAssociatedWithFailure: true },
+          { exportedFileName: 'fff.png', suggestedHumanReadableName: 'failure_1_UUID-A.png' },
+          { exportedFileName: 'rrr.png', suggestedHumanReadableName: 'reference_0_UUID-A.png' },
         ],
       },
     ];
     const byTest = groupManifestByTest(manifest, '/tmp/cache');
-    assert.equal(byTest.size, 2);
     const a = byTest.get('A/test1()');
     assert.equal(a.length, 2);
-    assert.equal(a[0].exportedFile, '/tmp/cache/a-fail-1.png');
+    assert.equal(a[0].exportedFile, '/tmp/cache/fff.png');
     assert.equal(a[0].role, 'failure');
-    assert.equal(a[0].index, 1);
-    assert.equal(a[1].role, 'reference');
+    assert.equal(a[0].groupKey, 'UUID-A');
   });
 });
 
 describe('pairAttachmentsForTest', () => {
-  it('emits one row per failure-N pairing reference / difference by index', () => {
+  it('groups reference / failure / difference by groupKey (one assertion = one triplet)', () => {
     const items = [
-      { role: 'failure', index: 1, baseName: 'testFoo.preset', exportedFile: '/c/f1.png', timestamp: 100 },
-      { role: 'reference', index: 1, baseName: 'testFoo.preset', exportedFile: '/c/r1.png' },
-      { role: 'difference', index: 1, baseName: 'testFoo.preset', exportedFile: '/c/d1.png' },
-      { role: 'failure', index: 2, baseName: 'testFoo.preset', exportedFile: '/c/f2.png', timestamp: 200 },
-      { role: 'reference', index: 2, baseName: 'testFoo.preset', exportedFile: '/c/r2.png' },
+      { role: 'reference', groupKey: 'U1', exportedFile: '/c/r1.png' },
+      { role: 'failure', groupKey: 'U1', exportedFile: '/c/f1.png', timestamp: 100 },
+      { role: 'difference', groupKey: 'U1', exportedFile: '/c/d1.png' },
+      { role: 'reference', groupKey: 'U2', exportedFile: '/c/r2.png' },
+      { role: 'failure', groupKey: 'U2', exportedFile: '/c/f2.png', timestamp: 200 },
     ];
     const paired = pairAttachmentsForTest(items);
     assert.equal(paired.length, 2);
-    assert.deepEqual(paired[0], {
-      index: 1, baseName: 'testFoo.preset',
+    const u1 = paired.find(p => p.actualPath === '/c/f1.png');
+    assert.deepEqual(u1, {
       actualPath: '/c/f1.png', referencePath: '/c/r1.png', differencePath: '/c/d1.png',
       timestamp: 100,
     });
-    assert.equal(paired[1].differencePath, null);
+    assert.equal(paired.find(p => p.actualPath === '/c/f2.png').differencePath, null);
   });
 
   it('returns [] when no failure attachment present', () => {
-    const items = [{ role: 'reference', index: 1, baseName: 'x', exportedFile: '/r' }];
+    const items = [{ role: 'reference', groupKey: 'U1', exportedFile: '/r' }];
     assert.deepEqual(pairAttachmentsForTest(items), []);
+  });
+
+  it('skips role=other (e.g. issue description text)', () => {
+    const items = [
+      { role: 'failure', groupKey: 'U1', exportedFile: '/f', timestamp: 0 },
+      { role: 'other', groupKey: 'Complete Issue Description', exportedFile: '/t' },
+    ];
+    assert.equal(pairAttachmentsForTest(items).length, 1);
+  });
+});
+
+describe('ensureExtension', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-ext-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('renames the file and returns the new path', () => {
+    const orig = path.join(tmp, 'abc');
+    fs.writeFileSync(orig, 'data');
+    const out = ensureExtension(orig, 'whatever.png');
+    assert.equal(out, orig + '.png');
+    assert.ok(fs.existsSync(out));
+    assert.ok(!fs.existsSync(orig));
+  });
+
+  it('is idempotent on a second pass', () => {
+    const orig = path.join(tmp, 'abc');
+    fs.writeFileSync(orig, 'data');
+    const first = ensureExtension(orig, 'x.png');
+    const second = ensureExtension(first, 'x.png');
+    assert.equal(first, second);
+    assert.ok(fs.existsSync(second));
+  });
+
+  it('returns the path unchanged when humanName has no extension', () => {
+    assert.equal(ensureExtension('/foo/bar', 'noext'), '/foo/bar');
   });
 });

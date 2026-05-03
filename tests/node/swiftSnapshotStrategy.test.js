@@ -9,6 +9,7 @@ const {
   resolveModulePath,
   parseTestIdentifier,
   locateXcresult,
+  bucketFailures,
 } = require('../../src/strategies/swift-snapshot');
 const { findNewestXcresult } = require('../../src/xcresultParser');
 
@@ -122,5 +123,65 @@ describe('locateXcresult', () => {
     fs.mkdirSync(path.join(tmpRoot, 'a/found.xcresult'), { recursive: true });
     const out = locateXcresult(tmpRoot, null);
     assert.equal(out, path.join(tmpRoot, 'a/found.xcresult'));
+  });
+});
+
+describe('bucketFailures', () => {
+  function setupModule(method, goldens) {
+    const snapDir = path.join(tmpRoot, 'Tests/M/__Snapshots__');
+    const classDir = path.join(snapDir, 'GreetingTests');
+    fs.mkdirSync(classDir, { recursive: true });
+    for (const g of goldens) fs.writeFileSync(path.join(classDir, g), 'png');
+    return [[snapDir, 'Tests/M', path.join(tmpRoot, 'Tests/M')]];
+  }
+
+  function makeFailure(method, paired) {
+    return {
+      testIdentifier: `GreetingTests/${method}()`,
+      name: `${method}()`,
+      paired,
+    };
+  }
+
+  it('emits a row per failure with delta_kind=pixel-diff and pairs goldens by enumeration order', () => {
+    const modules = setupModule('testFoo', ['testFoo.1.png', 'testFoo.2.png']);
+    const failures = [makeFailure('testFoo', [
+      { actualPath: '/c/a1', differencePath: '/c/d1', timestamp: 100 },
+      { actualPath: '/c/a2', differencePath: '/c/d2', timestamp: 100 },
+    ])];
+    const byModule = bucketFailures(failures, modules, 0);
+    const rows = byModule.get('Tests/M');
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].delta_kind, 'pixel-diff');
+    assert.equal(rows[0].golden_path, path.join(tmpRoot, 'Tests/M/__Snapshots__/GreetingTests/testFoo.1.png'));
+    assert.equal(rows[1].golden_path, path.join(tmpRoot, 'Tests/M/__Snapshots__/GreetingTests/testFoo.2.png'));
+    assert.equal(rows[0].has_golden, true);
+    assert.equal(rows[1].has_golden, true);
+  });
+
+  it('marks rows missing a golden when failures outnumber recorded snapshots', () => {
+    const modules = setupModule('testFoo', ['testFoo.1.png']);
+    const failures = [makeFailure('testFoo', [
+      { actualPath: '/c/a1', differencePath: '/c/d1' },
+      { actualPath: '/c/a2', differencePath: '/c/d2' },
+    ])];
+    const rows = bucketFailures(failures, modules, 0).get('Tests/M');
+    assert.equal(rows[0].has_golden, true);
+    assert.equal(rows[1].has_golden, false);
+    assert.equal(rows[1].golden_path, null);
+  });
+
+  it('buckets failures whose class is not on disk under :unknown with no golden', () => {
+    const modules = setupModule('testFoo', ['testFoo.1.png']);
+    const failures = [{
+      testIdentifier: 'StrayTests/testBar()',
+      name: 'testBar()',
+      paired: [{ actualPath: '/c/a', differencePath: '/c/d' }],
+    }];
+    const byModule = bucketFailures(failures, modules, 0);
+    const rows = byModule.get(':unknown');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].has_golden, false);
+    assert.equal(rows[0].class_name, 'StrayTests');
   });
 });

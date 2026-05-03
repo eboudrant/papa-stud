@@ -56,17 +56,27 @@ function walkTestNodes(testNodes) {
   return { stats, failures };
 }
 
-// swift-snapshot-testing names attachments `<base>.<role>[-N]` where role is
-// failure | reference | difference; the optional `-N` distinguishes multiple
-// failed assertions in a single test.
+// swift-snapshot-testing wraps each assertion in an XCTContext activity with
+// three image attachments (reference, failure, difference). Xcode flattens
+// them as `<role>_<positional-index>_<activity-uuid>.png` — the UUID groups
+// the triplet, and multiple failed assertions in one test method get
+// distinct UUIDs.
 function classifyAttachment(humanName) {
-  const m = /^(.*?)(?:[._-]?)(failure|reference|difference)(?:[._-](\d+))?$/i.exec(humanName || '');
-  if (!m) return { role: 'other', baseName: humanName, index: 0 };
-  return {
-    role: m[2].toLowerCase(),
-    baseName: (m[1] || '').replace(/[._-]+$/, ''),
-    index: m[3] ? parseInt(m[3], 10) : 1,
-  };
+  const noExt = (humanName || '').replace(/\.[^.]+$/, '');
+  const m = /^(reference|failure|difference)_\d+_(.+)$/.exec(noExt);
+  if (m) return { role: m[1].toLowerCase(), groupKey: m[2] };
+  return { role: 'other', groupKey: noExt };
+}
+
+// xcresulttool exports attachments as bare UUIDs; rename so /api/images sees
+// a file extension. Idempotent: a second pass finds the renamed file and the
+// rename throws ENOENT, which we ignore.
+function ensureExtension(originalPath, humanName) {
+  const ext = path.extname(humanName || '');
+  if (!ext || originalPath.endsWith(ext)) return originalPath;
+  const renamed = originalPath + ext;
+  try { fs.renameSync(originalPath, renamed); } catch {}
+  return renamed;
 }
 
 function groupManifestByTest(manifest, attachmentsDir) {
@@ -74,13 +84,12 @@ function groupManifestByTest(manifest, attachmentsDir) {
   for (const entry of manifest || []) {
     const items = (entry.attachments || []).map(a => {
       const cls = classifyAttachment(a.suggestedHumanReadableName);
+      const raw = path.join(attachmentsDir, a.exportedFileName);
       return {
-        exportedFile: path.join(attachmentsDir, a.exportedFileName),
+        exportedFile: ensureExtension(raw, a.suggestedHumanReadableName),
         humanName: a.suggestedHumanReadableName,
         role: cls.role,
-        baseName: cls.baseName,
-        index: cls.index,
-        isFailure: !!a.isAssociatedWithFailure,
+        groupKey: cls.groupKey,
         timestamp: a.timestamp || 0,
       };
     });
@@ -90,19 +99,23 @@ function groupManifestByTest(manifest, attachmentsDir) {
 }
 
 function pairAttachmentsForTest(items) {
-  const failures = items.filter(a => a.role === 'failure');
-  if (failures.length === 0) return [];
-  const refs = new Map(items.filter(a => a.role === 'reference').map(a => [a.index, a]));
-  const diffs = new Map(items.filter(a => a.role === 'difference').map(a => [a.index, a]));
-
-  return failures.map(f => ({
-    index: f.index,
-    baseName: f.baseName,
-    actualPath: f.exportedFile,
-    referencePath: refs.get(f.index)?.exportedFile || null,
-    differencePath: diffs.get(f.index)?.exportedFile || null,
-    timestamp: f.timestamp,
-  }));
+  const byGroup = new Map();
+  for (const it of items) {
+    if (it.role === 'other') continue;
+    if (!byGroup.has(it.groupKey)) byGroup.set(it.groupKey, {});
+    byGroup.get(it.groupKey)[it.role] = it;
+  }
+  const paired = [];
+  for (const triple of byGroup.values()) {
+    if (!triple.failure) continue;
+    paired.push({
+      actualPath: triple.failure.exportedFile,
+      referencePath: triple.reference?.exportedFile || null,
+      differencePath: triple.difference?.exportedFile || null,
+      timestamp: triple.failure.timestamp,
+    });
+  }
+  return paired;
 }
 
 function parseXcresult(xcresultPath, cacheDir) {
@@ -118,11 +131,14 @@ function parseXcresult(xcresultPath, cacheDir) {
     return { stats, failures: [], mtime };
   }
 
+  // `--only-failures` is too aggressive: Xcode tags swift-snapshot-testing's
+  // image attachments as `isAssociatedWithFailure: false` (only the issue
+  // description text is true), so the flag would strip the reference / failure
+  // / difference PNGs. Export everything; we filter to failed tests below.
   runXcrun([
     'xcresulttool', 'export', 'attachments',
     '--path', xcresultPath,
     '--output-path', cacheDir,
-    '--only-failures',
   ]);
 
   // Manifest may be missing if the run had failed tests but no attachments.
@@ -169,6 +185,7 @@ module.exports = {
   findNewestXcresult,
   walkTestNodes,
   classifyAttachment,
+  ensureExtension,
   groupManifestByTest,
   pairAttachmentsForTest,
 };
