@@ -175,6 +175,17 @@ describe('bucketFailures', () => {
     assert.equal(rows[1].snapshot_name, 'testFoo');
   });
 
+  it('prefers pair.goldenPath (mined from SnapshotTesting description) over enum fallback', () => {
+    const modules = setupModule('testFoo', ['testFoo.alpha.png', 'testFoo.beta.png']);
+    const betaPath = path.join(tmpRoot, 'Tests/M/__Snapshots__/GreetingTests/testFoo.beta.png');
+    const failures = [makeFailure('testFoo', [
+      { actualPath: '/c/a', differencePath: '/c/d', goldenPath: betaPath },
+    ])];
+    const rows = bucketFailures(failures, modules, 0).get('Tests/M');
+    assert.equal(rows[0].golden_path, betaPath);
+    assert.equal(rows[0].snapshot_name, 'testFoo.beta');
+  });
+
   it('buckets failures whose class is not on disk under :unknown with no golden', () => {
     const modules = setupModule('testFoo', ['testFoo.1.png']);
     const failures = [{
