@@ -60,12 +60,27 @@ function walkTestNodes(testNodes) {
 // three image attachments (reference, failure, difference). Xcode flattens
 // them as `<role>_<positional-index>_<activity-uuid>.png` — the UUID groups
 // the triplet, and multiple failed assertions in one test method get
-// distinct UUIDs.
+// distinct UUIDs. The text "Complete Issue Description.txt" carries the
+// SnapshotTesting error message, which we mine for the on-disk golden path.
 function classifyAttachment(humanName) {
   const noExt = (humanName || '').replace(/\.[^.]+$/, '');
   const m = /^(reference|failure|difference)_\d+_(.+)$/.exec(noExt);
   if (m) return { role: m[1].toLowerCase(), groupKey: m[2] };
+  if ((humanName || '').startsWith('Complete Issue Description')) {
+    return { role: 'description', groupKey: null };
+  }
   return { role: 'other', groupKey: null };
+}
+
+// SnapshotTesting writes failure messages like:
+//   @−
+//   "file:///path/to/golden.png"
+//   @+
+//   "file:///path/to/actual.png"
+// The minus is U+2212, but we accept ASCII '-' too for tooling robustness.
+function extractGoldenPathFromDescription(content) {
+  const m = /@[−-]\s*\n\s*"file:\/\/([^"]+)"/.exec(content || '');
+  return m ? m[1] : null;
 }
 
 // xcresulttool exports attachments as bare UUIDs; rename so /api/images sees
@@ -85,12 +100,18 @@ function groupManifestByTest(manifest, attachmentsDir) {
     const items = (entry.attachments || []).map(a => {
       const cls = classifyAttachment(a.suggestedHumanReadableName);
       const raw = path.join(attachmentsDir, a.exportedFileName);
-      return {
+      const item = {
         exportedFile: ensureExtension(raw, a.suggestedHumanReadableName),
         role: cls.role,
         groupKey: cls.groupKey,
         timestamp: a.timestamp || 0,
       };
+      if (cls.role === 'description') {
+        try {
+          item.goldenPath = extractGoldenPathFromDescription(fs.readFileSync(item.exportedFile, 'utf8'));
+        } catch { item.goldenPath = null; }
+      }
+      return item;
     });
     byTest.set(entry.testIdentifier, items);
   }
@@ -99,7 +120,12 @@ function groupManifestByTest(manifest, attachmentsDir) {
 
 function pairAttachmentsForTest(items) {
   const byGroup = new Map();
+  const descriptionPaths = [];
   for (const it of items) {
+    if (it.role === 'description') {
+      descriptionPaths.push(it.goldenPath || null);
+      continue;
+    }
     if (it.role === 'other') continue;
     if (!byGroup.has(it.groupKey)) byGroup.set(it.groupKey, {});
     byGroup.get(it.groupKey)[it.role] = it;
@@ -112,6 +138,14 @@ function pairAttachmentsForTest(items) {
       differencePath: triple.difference?.exportedFile || null,
       timestamp: triple.failure.timestamp,
     });
+  }
+  // XCTest emits image triplets in REVERSE test-execution order, while the
+  // SnapshotTesting descriptions are in forward order — reverse-zip them
+  // so each triplet picks up its canonical on-disk golden path.
+  if (descriptionPaths.length === paired.length) {
+    for (let i = 0; i < paired.length; i++) {
+      paired[i].goldenPath = descriptionPaths[paired.length - 1 - i];
+    }
   }
   return paired;
 }
@@ -186,4 +220,5 @@ module.exports = {
   ensureExtension,
   groupManifestByTest,
   pairAttachmentsForTest,
+  extractGoldenPathFromDescription,
 };

@@ -9,6 +9,7 @@ const {
   ensureExtension,
   groupManifestByTest,
   pairAttachmentsForTest,
+  extractGoldenPathFromDescription,
 } = require('../../src/xcresultParser');
 
 describe('walkTestNodes', () => {
@@ -57,8 +58,8 @@ describe('classifyAttachment', () => {
     assert.equal(classifyAttachment('reference_0_AAAA-BBBB.png').role, 'reference');
     assert.equal(classifyAttachment('difference_2_AAAA-BBBB.png').role, 'difference');
   });
-  it('returns role=other for the issue description', () => {
-    assert.equal(classifyAttachment('Complete Issue Description.txt').role, 'other');
+  it('returns role=description for the issue description', () => {
+    assert.equal(classifyAttachment('Complete Issue Description.txt').role, 'description');
   });
   it('returns role=other for an empty name', () => {
     assert.equal(classifyAttachment('').role, 'other');
@@ -98,10 +99,35 @@ describe('pairAttachmentsForTest', () => {
     assert.equal(paired.length, 2);
     const u1 = paired.find(p => p.actualPath === '/c/f1.png');
     assert.deepEqual(u1, {
-      actualPath: '/c/f1.png', differencePath: '/c/d1.png',
-      timestamp: 100,
+      actualPath: '/c/f1.png', differencePath: '/c/d1.png', timestamp: 100,
     });
     assert.equal(paired.find(p => p.actualPath === '/c/f2.png').differencePath, null);
+  });
+
+  it('reverse-zips description goldenPaths onto triplets (XCTest emits triplets backwards)', () => {
+    // Triplets in manifest order: U1 = last test assertion, U2 = first.
+    // Descriptions in manifest order: D0 = first test assertion, D1 = last.
+    const items = [
+      { role: 'reference', groupKey: 'U1', exportedFile: '/c/r1.png' },
+      { role: 'failure', groupKey: 'U1', exportedFile: '/c/f1.png', timestamp: 100 },
+      { role: 'reference', groupKey: 'U2', exportedFile: '/c/r2.png' },
+      { role: 'failure', groupKey: 'U2', exportedFile: '/c/f2.png', timestamp: 200 },
+      { role: 'description', goldenPath: '/disk/first.png' },
+      { role: 'description', goldenPath: '/disk/last.png' },
+    ];
+    const paired = pairAttachmentsForTest(items);
+    assert.equal(paired.find(p => p.actualPath === '/c/f1.png').goldenPath, '/disk/last.png');
+    assert.equal(paired.find(p => p.actualPath === '/c/f2.png').goldenPath, '/disk/first.png');
+  });
+
+  it('leaves goldenPath unset when description count mismatches triplet count', () => {
+    const items = [
+      { role: 'reference', groupKey: 'U1', exportedFile: '/c/r' },
+      { role: 'failure', groupKey: 'U1', exportedFile: '/c/f', timestamp: 0 },
+      { role: 'description', goldenPath: '/disk/a.png' },
+      { role: 'description', goldenPath: '/disk/b.png' },
+    ];
+    assert.equal(pairAttachmentsForTest(items)[0].goldenPath, undefined);
   });
 
   it('returns [] when no failure attachment present', () => {
@@ -112,9 +138,20 @@ describe('pairAttachmentsForTest', () => {
   it('skips role=other (e.g. issue description text)', () => {
     const items = [
       { role: 'failure', groupKey: 'U1', exportedFile: '/f', timestamp: 0 },
-      { role: 'other', groupKey: 'Complete Issue Description', exportedFile: '/t' },
+      { role: 'other', groupKey: null, exportedFile: '/t' },
     ];
     assert.equal(pairAttachmentsForTest(items).length, 1);
+  });
+});
+
+describe('extractGoldenPathFromDescription', () => {
+  it('parses the @− line emitted by SnapshotTesting (Unicode minus)', () => {
+    const msg = 'failed - Snapshot "x" does not match reference.\n\n@\u2212\n"file:///abs/path/to/golden.png"\n@+\n"file:///tmp/actual.png"\n';
+    assert.equal(extractGoldenPathFromDescription(msg), '/abs/path/to/golden.png');
+  });
+
+  it('returns null when no @− block is present', () => {
+    assert.equal(extractGoldenPathFromDescription('no diff block here'), null);
   });
 });
 

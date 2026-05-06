@@ -101,17 +101,20 @@ function bucketFailures(failures, modules, mtime) {
     const bucket = classToModule.get(className);
     const moduleName = bucket ? bucket.moduleName : ':unknown';
 
-    // Goldens on disk: `<method>.<N>.png` (per-call counter from 1), or
-    // `<method>.<preset>.<N>.png`. The xcresult doesn't say which call failed,
-    // so we pair failure i → sorted golden i.
+    // The parser mines the canonical path off the SnapshotTesting error
+    // description; this sorted list is the fallback when the description
+    // is missing or unparseable.
     const classDir = bucket ? path.join(bucket.snapDir, className) : null;
     const goldenCandidates = classDir
       ? readClassDir(classDir).filter(f => f.endsWith('.png') && f.startsWith(`${methodName}.`)).sort()
       : [];
 
     failure.paired.forEach((pair, idx) => {
-      const goldenName = goldenCandidates[idx] || null;
-      const goldenPath = goldenName ? path.join(classDir, goldenName) : null;
+      let goldenPath = pair.goldenPath || null;
+      if (!goldenPath && goldenCandidates[idx]) {
+        goldenPath = path.join(classDir, goldenCandidates[idx]);
+      }
+      const goldenName = goldenPath ? path.basename(goldenPath) : null;
       const filename = goldenName
         ? `${className}/${goldenName}`
         : `${className}/${methodName}.png`;
