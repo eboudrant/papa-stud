@@ -6,7 +6,15 @@
 
 const fs = require('fs');
 const path = require('path');
-const { parseXcresult, findNewestXcresult, BASE_PRUNE } = require('../xcresultParser');
+const crypto = require('crypto');
+const { parseXcresult, findRecentXcresults, BASE_PRUNE } = require('../xcresultParser');
+
+// Where headless test runners commonly drop xcresult bundles outside the
+// project tree. Walked at depth 1 only.
+const SHALLOW_XCRESULT_ROOTS = ['/tmp'];
+// Window for picking up "current" xcresults — long enough to cover an
+// overnight run, short enough to drop yesterday's noise.
+const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // `__Snapshots__/` never lives inside DerivedData, so prune it here even though
 // xcresultParser keeps it walkable (xcresult bundles do live under it).
@@ -49,13 +57,23 @@ function resolveModulePath(moduleName, projectRoot) {
   return path.join(projectRoot, ...moduleName.split('/'));
 }
 
-function locateXcresult(projectRoot, project) {
+// Returns the list of xcresult bundles a scan should ingest. With a pinned
+// `xcresult_path`, the project gets exactly that one bundle. Without it, we
+// walk the project tree (deep) plus a small set of common drop-points (e.g.
+// /tmp) shallowly and take everything modified within the recent window —
+// enough to aggregate failures across multiple workspaces in one repo.
+function locateXcresults(projectRoot, project) {
   if (project && project.xcresult_path) {
-    return path.isAbsolute(project.xcresult_path)
+    const p = path.isAbsolute(project.xcresult_path)
       ? project.xcresult_path
       : path.join(projectRoot, project.xcresult_path);
+    return [p];
   }
-  return findNewestXcresult(projectRoot);
+  return findRecentXcresults({
+    projectRoots: [projectRoot],
+    shallowRoots: SHALLOW_XCRESULT_ROOTS,
+    maxAgeMs: RECENT_WINDOW_MS,
+  });
 }
 
 // Identifiers come as `Target/Class/method()` or `Class/method()`; we recover
@@ -147,14 +165,42 @@ function bucketFailures(failures, modules, mtime) {
 }
 
 function parseProjectFailures(projectRoot, project, cacheDir) {
-  const xcresultPath = locateXcresult(projectRoot, project);
-  if (!xcresultPath) {
-    return { stats: null, byModule: new Map(), modules: [], mtime: 0, xcresultPath: null };
+  const xcresultPaths = locateXcresults(projectRoot, project);
+  if (xcresultPaths.length === 0) {
+    return { stats: null, byModule: new Map(), modules: [], mtime: 0, xcresultPaths: [] };
   }
-  const { stats, failures, mtime } = parseXcresult(xcresultPath, cacheDir);
   const modules = [...discoverModules(projectRoot)];
-  const byModule = bucketFailures(failures, modules, mtime);
-  return { stats, byModule, modules, mtime, xcresultPath };
+  const stats = { passed: 0, failed: 0, skipped: 0, expectedFailure: 0 };
+  const allFailures = [];
+  let maxMtime = 0;
+  for (const xcresultPath of xcresultPaths) {
+    // Each bundle exports into its own subdir so manifests don't overwrite
+    // each other. The hash keys off the absolute path, so reruns of the same
+    // bundle reuse the same subdir (xcresulttool overwrites on re-export).
+    const subCache = path.join(cacheDir, crypto.createHash('sha1').update(xcresultPath).digest('hex').slice(0, 12));
+    fs.mkdirSync(subCache, { recursive: true });
+    const r = parseXcresult(xcresultPath, subCache);
+    if (r.stats) {
+      stats.passed += r.stats.passed;
+      stats.failed += r.stats.failed;
+      stats.skipped += r.stats.skipped;
+      stats.expectedFailure += r.stats.expectedFailure;
+    }
+    allFailures.push(...r.failures);
+    if (r.mtime > maxMtime) maxMtime = r.mtime;
+  }
+  const byModule = bucketFailures(allFailures, modules, maxMtime);
+  // When two bundles cover the same test (e.g. /tmp had a stale run alongside
+  // a fresh one) they emit rows with identical filenames. Keep the newest.
+  for (const [moduleName, rows] of byModule) {
+    const newest = new Map();
+    for (const row of rows) {
+      const prev = newest.get(row.filename);
+      if (!prev || (row.mtime || 0) > (prev.mtime || 0)) newest.set(row.filename, row);
+    }
+    byModule.set(moduleName, [...newest.values()]);
+  }
+  return { stats, byModule, modules, mtime: maxMtime, xcresultPaths };
 }
 
 const usesJunit = false;
@@ -165,7 +211,7 @@ module.exports = {
   resolveModulePath,
   parseProjectFailures,
   bucketFailures,
-  locateXcresult,
+  locateXcresults,
   parseTestIdentifier,
   usesJunit,
 };

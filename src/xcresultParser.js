@@ -187,9 +187,23 @@ function parseXcresult(xcresultPath, cacheDir) {
   return { stats, failures, mtime };
 }
 
-function findNewestXcresult(root) {
-  let best = null;
-  let bestMtime = -1;
+// Walk one or more roots for `.xcresult` bundles. `projectRoots` are walked
+// recursively (BASE_PRUNE applies, DerivedData is intentionally walkable so
+// we still pick up Xcode's default test output). `shallowRoots` are inspected
+// only at depth 1 — for things like /tmp where headless test scripts drop a
+// bundle directly without nesting and we don't want to descend the full tree.
+// Bundles older than `maxAgeMs` are filtered out. Returns paths sorted newest
+// first.
+function findRecentXcresults({ projectRoots = [], shallowRoots = [], maxAgeMs = 24 * 60 * 60 * 1000 } = {}) {
+  const cutoff = Date.now() - maxAgeMs;
+  const found = new Map();
+  function record(full) {
+    if (found.has(full)) return;
+    try {
+      const m = fs.statSync(full).mtimeMs;
+      if (m >= cutoff) found.set(full, m);
+    } catch {}
+  }
   function walk(dir) {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -197,24 +211,28 @@ function findNewestXcresult(root) {
       if (!e.isDirectory()) continue;
       if (BASE_PRUNE.has(e.name)) continue;
       const full = path.join(dir, e.name);
-      if (e.name.endsWith('.xcresult')) {
-        try {
-          const m = fs.statSync(full).mtimeMs;
-          if (m > bestMtime) { bestMtime = m; best = full; }
-        } catch {}
-        continue;
-      }
+      if (e.name.endsWith('.xcresult')) { record(full); continue; }
       walk(full);
     }
   }
-  walk(root);
-  return best;
+  function shallow(dir) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.isDirectory() && e.name.endsWith('.xcresult')) {
+        record(path.join(dir, e.name));
+      }
+    }
+  }
+  for (const r of projectRoots) walk(r);
+  for (const r of shallowRoots) shallow(r);
+  return [...found.entries()].sort((a, b) => b[1] - a[1]).map(([p]) => p);
 }
 
 module.exports = {
   BASE_PRUNE,
   parseXcresult,
-  findNewestXcresult,
+  findRecentXcresults,
   walkTestNodes,
   classifyAttachment,
   ensureExtension,

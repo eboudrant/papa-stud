@@ -8,10 +8,10 @@ const {
   getWatchDirs,
   resolveModulePath,
   parseTestIdentifier,
-  locateXcresult,
+  locateXcresults,
   bucketFailures,
 } = require('../../src/strategies/swift-snapshot');
-const { findNewestXcresult } = require('../../src/xcresultParser');
+const { findRecentXcresults } = require('../../src/xcresultParser');
 
 let tmpRoot;
 
@@ -82,47 +82,85 @@ describe('parseTestIdentifier', () => {
   });
 });
 
-describe('findNewestXcresult', () => {
-  it('returns the newest .xcresult bundle by mtime', () => {
-    fs.mkdirSync(path.join(tmpRoot, 'a/Run-1.xcresult'), { recursive: true });
-    fs.mkdirSync(path.join(tmpRoot, 'b/Run-2.xcresult'), { recursive: true });
-    const newer = path.join(tmpRoot, 'b/Run-2.xcresult');
-    const older = path.join(tmpRoot, 'a/Run-1.xcresult');
-    fs.utimesSync(older, new Date(2020, 0, 1), new Date(2020, 0, 1));
-    fs.utimesSync(newer, new Date(2024, 0, 1), new Date(2024, 0, 1));
-    const found = findNewestXcresult(tmpRoot);
-    assert.equal(found, newer);
-  });
-
-  it('returns null if no xcresult is found', () => {
-    assert.equal(findNewestXcresult(tmpRoot), null);
-  });
-});
-
-describe('locateXcresult', () => {
+describe('locateXcresults', () => {
   it('honours project.xcresult_path absolute override', () => {
     const pinned = path.join(tmpRoot, 'pinned.xcresult');
     fs.mkdirSync(pinned, { recursive: true });
-    const out = locateXcresult(tmpRoot, { xcresult_path: pinned });
-    assert.equal(out, pinned);
+    assert.deepEqual(locateXcresults(tmpRoot, { xcresult_path: pinned }), [pinned]);
   });
 
   it('honours project.xcresult_path relative override', () => {
     const rel = 'subdir/pinned.xcresult';
     fs.mkdirSync(path.join(tmpRoot, rel), { recursive: true });
-    const out = locateXcresult(tmpRoot, { xcresult_path: rel });
-    assert.equal(out, path.join(tmpRoot, rel));
+    assert.deepEqual(
+      locateXcresults(tmpRoot, { xcresult_path: rel }),
+      [path.join(tmpRoot, rel)],
+    );
   });
 
   it('returns the override path even if missing (xcrun surfaces the error)', () => {
-    const out = locateXcresult(tmpRoot, { xcresult_path: '/no/such/path.xcresult' });
-    assert.equal(out, '/no/such/path.xcresult');
+    assert.deepEqual(
+      locateXcresults(tmpRoot, { xcresult_path: '/no/such/path.xcresult' }),
+      ['/no/such/path.xcresult'],
+    );
   });
 
-  it('falls back to newest *.xcresult under project root', () => {
+  it('falls back to recent *.xcresult bundles under project root', () => {
     fs.mkdirSync(path.join(tmpRoot, 'a/found.xcresult'), { recursive: true });
-    const out = locateXcresult(tmpRoot, null);
-    assert.equal(out, path.join(tmpRoot, 'a/found.xcresult'));
+    fs.mkdirSync(path.join(tmpRoot, 'b/also-found.xcresult'), { recursive: true });
+    // /tmp is also walked shallowly so the result may include unrelated
+    // bundles from the host — assert by subset rather than equality.
+    const out = locateXcresults(tmpRoot, null);
+    assert.ok(out.includes(path.join(tmpRoot, 'a/found.xcresult')));
+    assert.ok(out.includes(path.join(tmpRoot, 'b/also-found.xcresult')));
+  });
+});
+
+describe('findRecentXcresults', () => {
+  it('returns bundles newer than the cutoff sorted newest first', () => {
+    const a = path.join(tmpRoot, 'a/Run-1.xcresult');
+    const b = path.join(tmpRoot, 'b/Run-2.xcresult');
+    fs.mkdirSync(a, { recursive: true });
+    fs.mkdirSync(b, { recursive: true });
+    const now = Date.now();
+    fs.utimesSync(a, new Date(now - 60_000), new Date(now - 60_000));
+    fs.utimesSync(b, new Date(now - 1_000), new Date(now - 1_000));
+    const out = findRecentXcresults({ projectRoots: [tmpRoot] });
+    assert.deepEqual(out, [b, a]);
+  });
+
+  it('drops bundles older than maxAgeMs', () => {
+    const old = path.join(tmpRoot, 'old.xcresult');
+    fs.mkdirSync(old, { recursive: true });
+    fs.utimesSync(old, new Date(2020, 0, 1), new Date(2020, 0, 1));
+    assert.deepEqual(
+      findRecentXcresults({ projectRoots: [tmpRoot], maxAgeMs: 60_000 }),
+      [],
+    );
+  });
+
+  it('walks shallowRoots only at depth 1', () => {
+    const shallowRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-shallow-'));
+    try {
+      const top = path.join(shallowRoot, 'top.xcresult');
+      const nested = path.join(shallowRoot, 'sub/nested.xcresult');
+      fs.mkdirSync(top, { recursive: true });
+      fs.mkdirSync(nested, { recursive: true });
+      const out = findRecentXcresults({ shallowRoots: [shallowRoot] });
+      assert.deepEqual(out, [top]);
+    } finally {
+      fs.rmSync(shallowRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('deduplicates a bundle that appears under both deep and shallow roots', () => {
+    const bundle = path.join(tmpRoot, 'shared.xcresult');
+    fs.mkdirSync(bundle, { recursive: true });
+    const out = findRecentXcresults({
+      projectRoots: [tmpRoot],
+      shallowRoots: [tmpRoot],
+    });
+    assert.deepEqual(out, [bundle]);
   });
 });
 
