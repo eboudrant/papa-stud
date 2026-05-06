@@ -10,6 +10,7 @@ const {
   parseTestIdentifier,
   locateXcresults,
   bucketFailures,
+  dedupeRowsByFilename,
 } = require('../../src/strategies/swift-snapshot');
 const { findRecentXcresults } = require('../../src/xcresultParser');
 
@@ -236,5 +237,39 @@ describe('bucketFailures', () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].has_golden, false);
     assert.equal(rows[0].class_name, 'StrayTests');
+  });
+});
+
+describe('dedupeRowsByFilename', () => {
+  it('keeps the newest row when two bundles emit the same filename', () => {
+    const byModule = new Map([
+      ['Tests/M', [
+        { filename: 'foo.png', mtime: 100, source: 'old' },
+        { filename: 'foo.png', mtime: 200, source: 'new' },
+        { filename: 'bar.png', mtime: 50, source: 'only' },
+      ]],
+    ]);
+    dedupeRowsByFilename(byModule);
+    const rows = byModule.get('Tests/M').sort((a, b) => a.filename.localeCompare(b.filename));
+    assert.equal(rows.length, 2);
+    assert.equal(rows.find(r => r.filename === 'foo.png').source, 'new');
+    assert.equal(rows.find(r => r.filename === 'bar.png').source, 'only');
+  });
+
+  it('treats missing mtime as 0 so any timestamped row wins', () => {
+    const byModule = new Map([
+      ['Tests/M', [
+        { filename: 'foo.png', source: 'no-mtime' },
+        { filename: 'foo.png', mtime: 1, source: 'has-mtime' },
+      ]],
+    ]);
+    dedupeRowsByFilename(byModule);
+    assert.equal(byModule.get('Tests/M')[0].source, 'has-mtime');
+  });
+
+  it('leaves singletons untouched', () => {
+    const byModule = new Map([['Tests/M', [{ filename: 'foo.png', mtime: 1 }]]]);
+    dedupeRowsByFilename(byModule);
+    assert.equal(byModule.get('Tests/M').length, 1);
   });
 });

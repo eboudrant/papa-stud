@@ -173,7 +173,13 @@ function parseProjectFailures(projectRoot, project, cacheDir) {
     if (r.mtime > maxMtime) maxMtime = r.mtime;
   }
   const byModule = bucketFailures(allFailures, modules, maxMtime);
-  // Same `(module, filename)` from two bundles → keep the newer row.
+  dedupeRowsByFilename(byModule);
+  return { stats, byModule, modules, mtime: maxMtime, xcresultPaths };
+}
+
+// Same `(module, filename)` from two bundles → keep the newer row. Mutates
+// byModule in place.
+function dedupeRowsByFilename(byModule) {
   for (const [moduleName, rows] of byModule) {
     const newest = new Map();
     for (const row of rows) {
@@ -182,7 +188,7 @@ function parseProjectFailures(projectRoot, project, cacheDir) {
     }
     byModule.set(moduleName, [...newest.values()]);
   }
-  return { stats, byModule, modules, mtime: maxMtime, xcresultPaths };
+  return byModule;
 }
 
 const usesJunit = false;
@@ -193,6 +199,7 @@ module.exports = {
   resolveModulePath,
   parseProjectFailures,
   bucketFailures,
+  dedupeRowsByFilename,
   locateXcresults,
   parseTestIdentifier,
   usesJunit,
