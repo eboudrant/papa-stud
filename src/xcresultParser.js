@@ -187,10 +187,20 @@ function parseXcresult(xcresultPath, cacheDir) {
   return { stats, failures, mtime };
 }
 
-function findNewestXcresult(root) {
-  let best = null;
-  let bestMtime = -1;
-  function walk(dir) {
+// projectRoots walked recursively; shallowRoots inspected only at depth 1
+// (default `/tmp` covers headless test scripts that drop bundles there).
+// Bundles older than `maxAgeMs` (default 24h) are dropped. Sorted newest first.
+const DEFAULT_SHALLOW_ROOTS = ['/tmp'];
+const DEFAULT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function findRecentXcresults({
+  projectRoots = [],
+  shallowRoots = DEFAULT_SHALLOW_ROOTS,
+  maxAgeMs = DEFAULT_MAX_AGE_MS,
+} = {}) {
+  const cutoff = Date.now() - maxAgeMs;
+  const found = new Map();
+  function scan(dir, depth) {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
@@ -198,23 +208,25 @@ function findNewestXcresult(root) {
       if (BASE_PRUNE.has(e.name)) continue;
       const full = path.join(dir, e.name);
       if (e.name.endsWith('.xcresult')) {
+        if (found.has(full)) continue;
         try {
           const m = fs.statSync(full).mtimeMs;
-          if (m > bestMtime) { bestMtime = m; best = full; }
+          if (m >= cutoff) found.set(full, m);
         } catch {}
         continue;
       }
-      walk(full);
+      if (depth > 0) scan(full, depth - 1);
     }
   }
-  walk(root);
-  return best;
+  for (const r of projectRoots) scan(r, Infinity);
+  for (const r of shallowRoots) scan(r, 0);
+  return [...found.entries()].sort((a, b) => b[1] - a[1]).map(([p]) => p);
 }
 
 module.exports = {
   BASE_PRUNE,
   parseXcresult,
-  findNewestXcresult,
+  findRecentXcresults,
   walkTestNodes,
   classifyAttachment,
   ensureExtension,
