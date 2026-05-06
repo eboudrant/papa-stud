@@ -187,45 +187,39 @@ function parseXcresult(xcresultPath, cacheDir) {
   return { stats, failures, mtime };
 }
 
-// Walk one or more roots for `.xcresult` bundles. `projectRoots` are walked
-// recursively (BASE_PRUNE applies, DerivedData is intentionally walkable so
-// we still pick up Xcode's default test output). `shallowRoots` are inspected
-// only at depth 1 — for things like /tmp where headless test scripts drop a
-// bundle directly without nesting and we don't want to descend the full tree.
-// Bundles older than `maxAgeMs` are filtered out. Returns paths sorted newest
-// first.
-function findRecentXcresults({ projectRoots = [], shallowRoots = [], maxAgeMs = 24 * 60 * 60 * 1000 } = {}) {
+// projectRoots walked recursively; shallowRoots inspected only at depth 1
+// (default `/tmp` covers headless test scripts that drop bundles there).
+// Bundles older than `maxAgeMs` (default 24h) are dropped. Sorted newest first.
+const DEFAULT_SHALLOW_ROOTS = ['/tmp'];
+const DEFAULT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function findRecentXcresults({
+  projectRoots = [],
+  shallowRoots = DEFAULT_SHALLOW_ROOTS,
+  maxAgeMs = DEFAULT_MAX_AGE_MS,
+} = {}) {
   const cutoff = Date.now() - maxAgeMs;
   const found = new Map();
-  function record(full) {
-    if (found.has(full)) return;
-    try {
-      const m = fs.statSync(full).mtimeMs;
-      if (m >= cutoff) found.set(full, m);
-    } catch {}
-  }
-  function walk(dir) {
+  function scan(dir, depth) {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       if (BASE_PRUNE.has(e.name)) continue;
       const full = path.join(dir, e.name);
-      if (e.name.endsWith('.xcresult')) { record(full); continue; }
-      walk(full);
-    }
-  }
-  function shallow(dir) {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (e.isDirectory() && e.name.endsWith('.xcresult')) {
-        record(path.join(dir, e.name));
+      if (e.name.endsWith('.xcresult')) {
+        if (found.has(full)) continue;
+        try {
+          const m = fs.statSync(full).mtimeMs;
+          if (m >= cutoff) found.set(full, m);
+        } catch {}
+        continue;
       }
+      if (depth > 0) scan(full, depth - 1);
     }
   }
-  for (const r of projectRoots) walk(r);
-  for (const r of shallowRoots) shallow(r);
+  for (const r of projectRoots) scan(r, Infinity);
+  for (const r of shallowRoots) scan(r, 0);
   return [...found.entries()].sort((a, b) => b[1] - a[1]).map(([p]) => p);
 }
 

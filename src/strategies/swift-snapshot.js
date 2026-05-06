@@ -9,13 +9,6 @@ const path = require('path');
 const crypto = require('crypto');
 const { parseXcresult, findRecentXcresults, BASE_PRUNE } = require('../xcresultParser');
 
-// Where headless test runners commonly drop xcresult bundles outside the
-// project tree. Walked at depth 1 only.
-const SHALLOW_XCRESULT_ROOTS = ['/tmp'];
-// Window for picking up "current" xcresults — long enough to cover an
-// overnight run, short enough to drop yesterday's noise.
-const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
-
 // `__Snapshots__/` never lives inside DerivedData, so prune it here even though
 // xcresultParser keeps it walkable (xcresult bundles do live under it).
 const PRUNE = new Set([...BASE_PRUNE, 'DerivedData']);
@@ -57,11 +50,6 @@ function resolveModulePath(moduleName, projectRoot) {
   return path.join(projectRoot, ...moduleName.split('/'));
 }
 
-// Returns the list of xcresult bundles a scan should ingest. With a pinned
-// `xcresult_path`, the project gets exactly that one bundle. Without it, we
-// walk the project tree (deep) plus a small set of common drop-points (e.g.
-// /tmp) shallowly and take everything modified within the recent window —
-// enough to aggregate failures across multiple workspaces in one repo.
 function locateXcresults(projectRoot, project) {
   if (project && project.xcresult_path) {
     const p = path.isAbsolute(project.xcresult_path)
@@ -69,11 +57,7 @@ function locateXcresults(projectRoot, project) {
       : path.join(projectRoot, project.xcresult_path);
     return [p];
   }
-  return findRecentXcresults({
-    projectRoots: [projectRoot],
-    shallowRoots: SHALLOW_XCRESULT_ROOTS,
-    maxAgeMs: RECENT_WINDOW_MS,
-  });
+  return findRecentXcresults({ projectRoots: [projectRoot] });
 }
 
 // Identifiers come as `Target/Class/method()` or `Class/method()`; we recover
@@ -174,9 +158,8 @@ function parseProjectFailures(projectRoot, project, cacheDir) {
   const allFailures = [];
   let maxMtime = 0;
   for (const xcresultPath of xcresultPaths) {
-    // Each bundle exports into its own subdir so manifests don't overwrite
-    // each other. The hash keys off the absolute path, so reruns of the same
-    // bundle reuse the same subdir (xcresulttool overwrites on re-export).
+    // Per-bundle subdir keyed by absolute path so re-exporting the same bundle
+    // reuses its slot, and parallel bundles don't overwrite each other's manifest.
     const subCache = path.join(cacheDir, crypto.createHash('sha1').update(xcresultPath).digest('hex').slice(0, 12));
     fs.mkdirSync(subCache, { recursive: true });
     const r = parseXcresult(xcresultPath, subCache);
@@ -190,8 +173,7 @@ function parseProjectFailures(projectRoot, project, cacheDir) {
     if (r.mtime > maxMtime) maxMtime = r.mtime;
   }
   const byModule = bucketFailures(allFailures, modules, maxMtime);
-  // When two bundles cover the same test (e.g. /tmp had a stale run alongside
-  // a fresh one) they emit rows with identical filenames. Keep the newest.
+  // Same `(module, filename)` from two bundles → keep the newer row.
   for (const [moduleName, rows] of byModule) {
     const newest = new Map();
     for (const row of rows) {

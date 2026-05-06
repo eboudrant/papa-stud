@@ -125,7 +125,7 @@ describe('findRecentXcresults', () => {
     const now = Date.now();
     fs.utimesSync(a, new Date(now - 60_000), new Date(now - 60_000));
     fs.utimesSync(b, new Date(now - 1_000), new Date(now - 1_000));
-    const out = findRecentXcresults({ projectRoots: [tmpRoot] });
+    const out = findRecentXcresults({ projectRoots: [tmpRoot], shallowRoots: [] });
     assert.deepEqual(out, [b, a]);
   });
 
@@ -134,7 +134,7 @@ describe('findRecentXcresults', () => {
     fs.mkdirSync(old, { recursive: true });
     fs.utimesSync(old, new Date(2020, 0, 1), new Date(2020, 0, 1));
     assert.deepEqual(
-      findRecentXcresults({ projectRoots: [tmpRoot], maxAgeMs: 60_000 }),
+      findRecentXcresults({ projectRoots: [tmpRoot], shallowRoots: [], maxAgeMs: 60_000 }),
       [],
     );
   });
