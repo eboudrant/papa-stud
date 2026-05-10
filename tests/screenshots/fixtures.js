@@ -82,6 +82,9 @@ async function mockApi(page) {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SCANS_LIST) });
   });
 
+  await page.route(/\/api\/images\/meta/, route => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ apng: false }) });
+  });
   await page.route(/\/api\/images/, route => {
     const url = route.request().url();
     let body = DELTA_PNG;
