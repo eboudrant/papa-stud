@@ -13,6 +13,7 @@ const video = require('./video');
 const config = require('./config');
 const updateCheck = require('./updateCheck');
 const apng = require('./apng');
+const imageSlice = require('./imageSlice');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
 const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
@@ -111,6 +112,27 @@ function createRouter() {
     // r.real is already constrained to a project root or the cache dir by
     // resolveImagePath, so passing it on to detectApng is safe.
     res.json(apng.detectApng(r.real));
+  });
+
+  // Crop one of `of` equal vertical slices from a composite delta image
+  // (Paparazzi / HML renderer write `[expected | diff | actual]` into a
+  // single PNG/APNG). Lets the detail page split it into Toggle / Slider
+  // panels even when the tool didn't emit separate golden/actual files.
+  router.get('/api/images/slice', (req, res) => {
+    const r = resolveImagePath(req.query.path);
+    if (r.error) return res.status(r.status).json({ error: r.error });
+    const n = parseInt(req.query.n, 10);
+    const of = parseInt(req.query.of, 10);
+    if (!(n >= 0 && of >= 2 && n < of)) {
+      return res.status(400).json({ error: 'invalid n / of' });
+    }
+    const cacheRoot = path.join(projects.getDataDir(), 'cache', 'slice');
+    try {
+      const out = imageSlice.sliceImage(r.real, n, of, cacheRoot);
+      res.sendFile(out);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // --- Config ---

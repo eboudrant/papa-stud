@@ -151,9 +151,20 @@ function _renderDetail(scanId) {
   const f = _detailFailure;
   const content = document.getElementById('content');
 
-  const goldenSrc = f.golden_path ? `/api/images?path=${encodeURIComponent(f.golden_path)}` : '';
+  // Paparazzi-style profiles emit a single composite delta with
+  // [expected | diff | actual] side-by-side. When that's all we have, fall
+  // back to per-panel slices of the composite so Toggle / Slider / Strip
+  // can still show "Expected" and "Actual" cleanly. The slice endpoint
+  // serves a cropped PNG/APNG.
+  const isComposite = !!f.delta_path && !f.golden_path && !f.actual_path;
+  const sliceSrc = (n) => `/api/images/slice?path=${encodeURIComponent(f.delta_path)}&n=${n}&of=3`;
+  const goldenSrc = f.golden_path
+    ? `/api/images?path=${encodeURIComponent(f.golden_path)}`
+    : (isComposite ? sliceSrc(0) : '');
   const deltaSrc = f.delta_path ? `/api/images?path=${encodeURIComponent(f.delta_path)}` : '';
-  const actualSrc = f.actual_path ? `/api/images?path=${encodeURIComponent(f.actual_path)}` : '';
+  const actualSrc = f.actual_path
+    ? `/api/images?path=${encodeURIComponent(f.actual_path)}`
+    : (isComposite ? sliceSrc(2) : '');
   // When actual is missing (e.g., figma handler only writes delta), use delta as fallback
   const effectiveActual = actualSrc || deltaSrc;
   const hasDelta = !!deltaSrc;
@@ -195,15 +206,19 @@ function _renderDetail(scanId) {
   }
 
   if (_viewMode === 'delta') {
-    // For tools whose delta is a raw pixel-diff (swift-snapshot), compose the
-    // 3-panel strip client-side so reviewers see expected/diff/actual at once,
-    // matching Roborazzi/Paparazzi's already-composited delta.
-    const stripDelta = f.delta_kind === 'pixel-diff' && goldenSrc && deltaSrc;
+    // Render a labeled 3-panel strip whenever we have separate Expected / Diff
+    // / Actual frames — either because the tool emitted three files (swift-
+    // snapshot's pixel-diff) or because we sliced its single composite delta
+    // (Paparazzi / HML renderer).
+    const stripFromComposite = isComposite;
+    const stripDeltaSrc = stripFromComposite ? sliceSrc(1) : deltaSrc;
+    const stripDelta = (f.delta_kind === 'pixel-diff' || stripFromComposite)
+      && goldenSrc && stripDeltaSrc && actualSrc;
     if (stripDelta) {
       viewContent = `<div class="detail-fullview">
           <div class="delta-strip">
             <div class="delta-strip-cell"><div class="delta-strip-label">Expected</div><img src="${goldenSrc}"></div>
-            <div class="delta-strip-cell"><div class="delta-strip-label">Diff</div><img src="${deltaSrc}"></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Diff</div><img src="${stripDeltaSrc}"></div>
             <div class="delta-strip-cell"><div class="delta-strip-label">Actual</div><img src="${actualSrc}"></div>
           </div>
         </div>`;
