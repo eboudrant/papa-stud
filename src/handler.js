@@ -12,6 +12,7 @@ const templates = require('./templates');
 const video = require('./video');
 const config = require('./config');
 const updateCheck = require('./updateCheck');
+const apng = require('./apng');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
 const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
@@ -66,28 +67,41 @@ function createRouter() {
     else res.status(404).json({ error: 'job not found' });
   });
 
-  router.get('/api/images', (req, res) => {
-    const filePath = req.query.path;
+  // Resolve a user-supplied image path against the same allowlist /api/images
+  // and /api/images/meta share. Returns { real } on success or
+  // { status, error } on failure.
+  function resolveImagePath(filePath) {
     if (!filePath || !path.isAbsolute(filePath)) {
-      return res.status(400).json({ error: 'absolute path required' });
+      return { status: 400, error: 'absolute path required' };
     }
     const ext = path.extname(filePath).toLowerCase();
     if (ext !== '.png' && ext !== '.jpg' && ext !== '.jpeg') {
-      return res.status(400).json({ error: 'only image files allowed' });
+      return { status: 400, error: 'only image files allowed' };
     }
-    // Resolve symlinks to prevent traversal via symlink targets
     let real;
-    try { real = fs.realpathSync(filePath); } catch { return res.status(404).json({ error: 'not found' }); }
-    // Allowed roots: any project path + the data/cache dir (xcresult attachments
-    // live there for swift-snapshot strategies).
+    try { real = fs.realpathSync(filePath); }
+    catch { return { status: 404, error: 'not found' }; }
     const roots = [];
     for (const p of projects.listProjects()) {
       try { roots.push(fs.realpathSync(p.path)); } catch {}
     }
     try { roots.push(fs.realpathSync(path.join(projects.getDataDir(), 'cache'))); } catch {}
-    const allowedRoot = roots.find(r => real.startsWith(r + path.sep));
-    if (!allowedRoot) return res.status(403).json({ error: 'forbidden' });
-    res.sendFile(real);
+    if (!roots.find(r => real.startsWith(r + path.sep))) {
+      return { status: 403, error: 'forbidden' };
+    }
+    return { real };
+  }
+
+  router.get('/api/images', (req, res) => {
+    const r = resolveImagePath(req.query.path);
+    if (r.error) return res.status(r.status).json({ error: r.error });
+    res.sendFile(r.real);
+  });
+
+  router.get('/api/images/meta', (req, res) => {
+    const r = resolveImagePath(req.query.path);
+    if (r.error) return res.status(r.status).json({ error: r.error });
+    res.json(apng.detectApng(r.real));
   });
 
   // --- Config ---
