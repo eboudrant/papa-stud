@@ -415,6 +415,11 @@ select.input { appearance: auto; }
 .zoom-controls .apng-controls {
   padding: 0; background: transparent; border-radius: 0; gap: 6px;
 }
+/* Standalone bar for delta-strip mode (no .zoom-controls in DOM). */
+.apng-strip-bar {
+  flex: 0 0 auto; display: flex; justify-content: center;
+  padding: 6px 12px; border-top: 1px solid var(--border); background: var(--bg);
+}
 .apng-btn {
   background: transparent; border: 1px solid var(--border, #ddd);
   border-radius: 4px; padding: 2px 8px; font-size: 13px; line-height: 1;

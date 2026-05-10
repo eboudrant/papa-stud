@@ -1,9 +1,12 @@
 /**
  * Wrap any `<img src="/api/images?path=...">` whose target is an APNG with a
- * canvas + control bar (prev / play-pause / next / scrub / counter). Static
- * PNGs are left alone. Decoding uses the vendored UPNG.js (with
- * pako_inflate); the browser doesn't expose any way to pause or seek inside
- * an animated PNG natively.
+ * canvas, plus a single shared control bar that drives every APNG in the
+ * same `.detail-fullview` in lockstep — so the user can scrub Expected,
+ * Diff, and Actual to the same frame for visual diffing. Static PNGs are
+ * left alone.
+ *
+ * Decoding uses the vendored UPNG.js (with pako_inflate); the browser
+ * doesn't expose any way to pause or seek inside an animated PNG natively.
  */
 
 (function () {
@@ -52,20 +55,153 @@
     return bar;
   }
 
-  function enhance(img) {
-    const imagePath = imagePathFromSrc(img.getAttribute('src'));
-    if (!imagePath) return;
-    if (img.dataset.apngEnhanced === 'pending' || img.dataset.apngEnhanced === 'done') return;
-    img.dataset.apngEnhanced = 'pending';
+  // One clock per .detail-fullview. Drives every canvas registered with it
+  // to the same frame index. Per-canvas frame counts can differ — each
+  // clamps to its own last frame past its end.
+  function createClock() {
+    const subs = []; // { ctx, frames, width, height }
+    let idx = 0;
+    let maxFrames = 0;
+    let playing = false;
+    let timer = null;
+    const listeners = { change: [], playState: [] };
 
-    fetchMeta(imagePath).then(async meta => {
-      if (!meta.apng || !meta.frameCount || meta.frameCount < 2) {
-        img.dataset.apngEnhanced = 'done';
-        return;
+    function emit(name, ...args) { for (const fn of listeners[name]) fn(...args); }
+
+    function renderAll() {
+      for (const s of subs) {
+        const i = Math.min(idx, s.frames.length - 1);
+        s.ctx.putImageData(new ImageData(s.frames[i].data, s.width, s.height), 0, 0);
       }
-      // Detached during the await? Bail.
-      if (!img.isConnected) return;
+    }
 
+    function setIdx(v) {
+      if (!maxFrames) return;
+      idx = ((v % maxFrames) + maxFrames) % maxFrames;
+      renderAll();
+      emit('change', idx, maxFrames);
+    }
+
+    // Use the longest delay across active subs so all animations stay
+    // roughly aligned to wall-clock time even when their per-frame delays
+    // disagree.
+    function currentDelay() {
+      let d = 100;
+      for (const s of subs) {
+        const i = Math.min(idx, s.frames.length - 1);
+        if (s.frames[i].delay > d) d = s.frames[i].delay;
+      }
+      return d;
+    }
+
+    function tick() {
+      if (!playing) return;
+      timer = setTimeout(() => { setIdx(idx + 1); tick(); }, currentDelay());
+    }
+
+    return {
+      add(sub) {
+        subs.push(sub);
+        if (sub.frames.length > maxFrames) maxFrames = sub.frames.length;
+        // Render the new sub at the current idx so it joins in sync.
+        const i = Math.min(idx, sub.frames.length - 1);
+        sub.ctx.putImageData(new ImageData(sub.frames[i].data, sub.width, sub.height), 0, 0);
+        emit('change', idx, maxFrames);
+      },
+      play() {
+        if (playing || !maxFrames) return;
+        playing = true;
+        emit('playState', true);
+        tick();
+      },
+      pause() {
+        if (!playing) return;
+        playing = false;
+        if (timer) { clearTimeout(timer); timer = null; }
+        emit('playState', false);
+      },
+      setIdx,
+      get idx() { return idx; },
+      get maxFrames() { return maxFrames; },
+      get playing() { return playing; },
+      on(name, fn) { listeners[name].push(fn); },
+    };
+  }
+
+  // Wire one shared control bar to a clock. Returns the bar element.
+  function bindControls(clock) {
+    const bar = makeControls();
+    const prevBtn = bar.querySelector('.apng-prev');
+    const playBtn = bar.querySelector('.apng-play');
+    const nextBtn = bar.querySelector('.apng-next');
+    const scrub = bar.querySelector('.apng-scrub');
+    const count = bar.querySelector('.apng-count');
+
+    prevBtn.addEventListener('click', () => { clock.pause(); clock.setIdx(clock.idx - 1); });
+    nextBtn.addEventListener('click', () => { clock.pause(); clock.setIdx(clock.idx + 1); });
+    playBtn.addEventListener('click', () => clock.playing ? clock.pause() : clock.play());
+    scrub.addEventListener('input', () => { clock.pause(); clock.setIdx(parseInt(scrub.value, 10)); });
+
+    clock.on('change', (idx, max) => {
+      scrub.max = String(Math.max(0, max - 1));
+      scrub.value = String(idx);
+      count.textContent = `${idx + 1} / ${max}`;
+    });
+    clock.on('playState', p => { playBtn.textContent = p ? '⏸' : '▶'; });
+
+    return bar;
+  }
+
+  // Replace one <img> with a <canvas>. Doesn't render anything itself —
+  // the clock is responsible for that on `add`.
+  function buildCanvas(img, width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    if (img.id) canvas.id = img.id;
+    if (img.className) canvas.className = img.className;
+    canvas.style.cssText = img.style.cssText;
+    // Pan/zoom and slider code reads naturalWidth/Height/complete — shim
+    // them so swapping in a canvas doesn't require touching those paths.
+    canvas.naturalWidth = width;
+    canvas.naturalHeight = height;
+    canvas.complete = true;
+    return canvas;
+  }
+
+  // Find or create the host element for the shared control bar.
+  function mountBar(fullview, bar) {
+    const zoomBar = fullview.querySelector('.zoom-controls');
+    if (zoomBar) { zoomBar.appendChild(bar); return; }
+    // Layouts without a zoom bar (delta-strip): drop a standalone bar at
+    // the bottom of the fullview so it sits below the strip.
+    const wrap = document.createElement('div');
+    wrap.className = 'apng-strip-bar';
+    wrap.appendChild(bar);
+    fullview.appendChild(wrap);
+  }
+
+  async function enhanceFullview(fullview) {
+    const imgs = [...fullview.querySelectorAll('img[src*="/api/images"]')]
+      .filter(i => i.dataset.apngEnhanced !== 'done' && i.dataset.apngEnhanced !== 'pending');
+    if (!imgs.length) return;
+    imgs.forEach(i => { i.dataset.apngEnhanced = 'pending'; });
+
+    // Resolve metas in parallel; keep only APNGs with at least 2 frames.
+    const targets = [];
+    await Promise.all(imgs.map(async img => {
+      const p = imagePathFromSrc(img.getAttribute('src'));
+      if (!p) { img.dataset.apngEnhanced = 'done'; return; }
+      const meta = await fetchMeta(p);
+      if (meta.apng && meta.frameCount >= 2) targets.push(img);
+      else img.dataset.apngEnhanced = 'done';
+    }));
+    if (!targets.length) return;
+
+    let clock = null;
+    let bar = null;
+    await Promise.all(targets.map(async img => {
+      if (!img.isConnected) return;
       let decoded;
       try {
         const buf = await fetch(img.src).then(r => r.arrayBuffer());
@@ -76,91 +212,41 @@
         return;
       }
       if (!img.isConnected) return;
-
-      const { width, height, frames } = decoded;
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      // Inherit the styling/sizing the layout had pinned on the <img>.
-      if (img.id) canvas.id = img.id;
-      if (img.className) canvas.className = img.className;
-      canvas.style.cssText = img.style.cssText;
-      // The pan/zoom and slider code reads `naturalWidth`/`naturalHeight`/
-      // `complete` off the image element — shim them so swapping in a canvas
-      // doesn't require touching that code path.
-      canvas.naturalWidth = width;
-      canvas.naturalHeight = height;
-      canvas.complete = true;
+      const canvas = buildCanvas(img, decoded.width, decoded.height);
       const ctx = canvas.getContext('2d');
 
-      const controls = makeControls();
-
-      const prevBtn = controls.querySelector('.apng-prev');
-      const playBtn = controls.querySelector('.apng-play');
-      const nextBtn = controls.querySelector('.apng-next');
-      const scrub = controls.querySelector('.apng-scrub');
-      const count = controls.querySelector('.apng-count');
-      scrub.max = String(frames.length - 1);
-
-      let idx = 0;
-      let playing = false;
-      let timer = null;
-
-      function render(i) {
-        idx = ((i % frames.length) + frames.length) % frames.length;
-        ctx.putImageData(new ImageData(frames[idx].data, width, height), 0, 0);
-        scrub.value = String(idx);
-        count.textContent = `${idx + 1} / ${frames.length}`;
+      // Lazy-initialize the clock + bar on the first successful decode so we
+      // don't mount an empty control bar when every image fails to decode.
+      if (!clock) {
+        clock = createClock();
+        bar = bindControls(clock);
+        mountBar(fullview, bar);
       }
 
-      function tick() {
-        if (!playing) return;
-        timer = setTimeout(() => { render(idx + 1); tick(); }, frames[idx].delay);
-      }
-
-      function play() {
-        if (playing) return;
-        playing = true;
-        playBtn.textContent = '⏸';
-        tick();
-      }
-
-      function pause() {
-        playing = false;
-        playBtn.textContent = '▶';
-        if (timer) { clearTimeout(timer); timer = null; }
-      }
-
-      prevBtn.addEventListener('click', () => { pause(); render(idx - 1); });
-      nextBtn.addEventListener('click', () => { pause(); render(idx + 1); });
-      playBtn.addEventListener('click', () => playing ? pause() : play());
-      scrub.addEventListener('input', () => { pause(); render(parseInt(scrub.value, 10)); });
-
-      // Place controls in the existing zoom-controls bar when one exists
-      // (Toggle / Slider / non-strip Delta) so they sit outside the draggable
-      // image area. For layouts without a zoom bar (delta-strip cells), keep
-      // them inline in a wrap below the canvas.
-      const zoomBar = img.closest('.detail-fullview')?.querySelector('.zoom-controls');
-      if (zoomBar) {
-        img.replaceWith(canvas);
-        zoomBar.appendChild(controls);
-      } else {
-        const wrap = document.createElement('div');
-        wrap.className = 'apng-wrap';
-        wrap.appendChild(canvas);
-        wrap.appendChild(controls);
-        img.replaceWith(wrap);
-      }
+      // Slider mode: each img has its own DOM slot we need to preserve. For
+      // simple panels (Toggle/Delta strip cells), straight replace.
+      img.replaceWith(canvas);
+      clock.add({ ctx, frames: decoded.frames, width: decoded.width, height: decoded.height });
       img.dataset.apngEnhanced = 'done';
-      render(0);
-      play();
-    }).catch(() => { img.dataset.apngEnhanced = 'done'; });
+    }));
+
+    if (clock) clock.play();
   }
 
   function enhanceAll(root = document) {
-    if (!window.UPNG) return; // vendor not loaded
-    const imgs = root.querySelectorAll('img[src*="/api/images"]');
-    imgs.forEach(enhance);
+    if (!window.UPNG) return;
+    // Process each `.detail-fullview` independently so each gets its own clock.
+    // If the root itself is the fullview (or has no fullview children), treat
+    // it as a single scope.
+    const fullviews = root.matches?.('.detail-fullview')
+      ? [root]
+      : [...root.querySelectorAll('.detail-fullview')];
+    if (fullviews.length === 0) {
+      // Root has no .detail-fullview — fall back to whole-root scope.
+      enhanceFullview(root);
+      return;
+    }
+    for (const fv of fullviews) enhanceFullview(fv);
   }
 
   window.papastudApng = { enhanceAll };
