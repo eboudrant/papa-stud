@@ -42,6 +42,15 @@ Why this change exists.
 2. `gh pr create --title "..." --body "$(cat <<'EOF' ... EOF)"` with **Summary** + **Test plan** sections.
 3. Stop and report the PR URL. **Do not auto-merge.** The user reviews and merges themselves.
 4. Only enable auto-merge if the user explicitly asks for that specific PR ("auto-merge it", "send it through").
+5. **After every push (initial or follow-up), once CI has settled, sweep PR feedback.** Don't make the user notice problems for you. After the `Analyze (...)` and other checks finish:
+   ```
+   # Reviews & inline comments (CodeQL bot posts here too)
+   gh pr view <n> --json reviews --jq '.reviews[] | "[\(.author.login) \(.state)] \(.body)"'
+   gh api repos/<o>/<r>/pulls/<n>/comments --jq '.[] | "\(.path):\(.line // .original_line) [\(.user.login)] \(.body)"'
+   # New code-scanning alerts
+   gh api repos/<o>/<r>/code-scanning/alerts --jq '.[] | select(.state == "open") | "\(.number) \(.rule.id) \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
+   ```
+   Address anything actionable before declaring the PR ready: fix real bugs the reviewer flagged, dismiss CodeQL findings that fall under the threat model below (with both an in-source comment and the API dismissal), or push a defensible counter-argument as a PR comment. **Never ignore CodeQL alerts and assume the user will see them** — they cost nothing to triage immediately and erode trust if they pile up.
 
 ## Reading PR status
 
