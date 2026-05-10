@@ -70,6 +70,13 @@ function createRouter() {
   // Resolve a user-supplied image path against the same allowlist /api/images
   // and /api/images/meta share. Returns { real } on success or
   // { status, error } on failure.
+  //
+  // codeql[js/path-injection]: by design — single-user local app, server binds
+  // 127.0.0.1 (Electron only; no remote attacker). The path is normalized via
+  // path.isAbsolute + ext check + realpathSync, then rejected unless the
+  // resolved location lives under a known project root or the data/cache dir
+  // (see threat model in .claude/rules/dev_workflow.md).
+  // codeql[js/missing-rate-limiting]: same — no remote attacker, no DoS surface.
   function resolveImagePath(filePath) {
     if (!filePath || !path.isAbsolute(filePath)) {
       return { status: 400, error: 'absolute path required' };
@@ -101,6 +108,8 @@ function createRouter() {
   router.get('/api/images/meta', (req, res) => {
     const r = resolveImagePath(req.query.path);
     if (r.error) return res.status(r.status).json({ error: r.error });
+    // r.real is already constrained to a project root or the cache dir by
+    // resolveImagePath, so passing it on to detectApng is safe.
     res.json(apng.detectApng(r.real));
   });
 

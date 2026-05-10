@@ -14,6 +14,10 @@ const fs = require('fs');
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
+// codeql[js/path-injection]: by design — `filePath` reaches this function
+// only after `resolveImagePath` (in handler.js) has constrained it to a known
+// project root or the data/cache dir. Single-user local app, 127.0.0.1, no
+// remote attacker. See `.claude/rules/dev_workflow.md` threat model.
 function detectApng(filePath) {
   let fd;
   try {
