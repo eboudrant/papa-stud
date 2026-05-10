@@ -118,6 +118,10 @@ function createRouter() {
   // (Paparazzi / HML renderer write `[expected | diff | actual]` into a
   // single PNG/APNG). Lets the detail page split it into Toggle / Slider
   // panels even when the tool didn't emit separate golden/actual files.
+  //
+  // codeql[js/missing-rate-limiting]: same as /api/images and /api/images/meta
+  // — single-user local app, 127.0.0.1 only, no remote attacker. See
+  // `.claude/rules/dev_workflow.md` threat model.
   router.get('/api/images/slice', (req, res) => {
     const r = resolveImagePath(req.query.path);
     if (r.error) return res.status(r.status).json({ error: r.error });

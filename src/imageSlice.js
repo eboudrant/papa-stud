@@ -59,6 +59,11 @@ function generateSlice(srcPath, n, of, outPath) {
 
 // Returns the on-disk path to the cached slice, generating it on first hit.
 // Cache key includes the source mtime so a re-recorded composite invalidates.
+// codeql[js/path-injection]: by design — `srcPath` is only ever invoked
+// from the /api/images/slice route AFTER resolveImagePath has constrained
+// it to a known project root or the data/cache dir. Single-user local app,
+// 127.0.0.1 only, no remote attacker. See `.claude/rules/dev_workflow.md`
+// threat model.
 function sliceImage(srcPath, n, of, cacheRoot) {
   if (!Number.isInteger(n) || !Number.isInteger(of) || n < 0 || of < 2 || n >= of) {
     throw new Error(`invalid slice ${n} of ${of}`);
