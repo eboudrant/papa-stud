@@ -85,13 +85,15 @@
       if (img.id) canvas.id = img.id;
       if (img.className) canvas.className = img.className;
       canvas.style.cssText = img.style.cssText;
+      // The pan/zoom and slider code reads `naturalWidth`/`naturalHeight`/
+      // `complete` off the image element — shim them so swapping in a canvas
+      // doesn't require touching that code path.
+      canvas.naturalWidth = width;
+      canvas.naturalHeight = height;
+      canvas.complete = true;
       const ctx = canvas.getContext('2d');
 
-      const wrap = document.createElement('div');
-      wrap.className = 'apng-wrap';
-      wrap.appendChild(canvas);
       const controls = makeControls();
-      wrap.appendChild(controls);
 
       const prevBtn = controls.querySelector('.apng-prev');
       const playBtn = controls.querySelector('.apng-play');
@@ -134,7 +136,21 @@
       playBtn.addEventListener('click', () => playing ? pause() : play());
       scrub.addEventListener('input', () => { pause(); render(parseInt(scrub.value, 10)); });
 
-      img.replaceWith(wrap);
+      // Place controls in the existing zoom-controls bar when one exists
+      // (Toggle / Slider / non-strip Delta) so they sit outside the draggable
+      // image area. For layouts without a zoom bar (delta-strip cells), keep
+      // them inline in a wrap below the canvas.
+      const zoomBar = img.closest('.detail-fullview')?.querySelector('.zoom-controls');
+      if (zoomBar) {
+        img.replaceWith(canvas);
+        zoomBar.appendChild(controls);
+      } else {
+        const wrap = document.createElement('div');
+        wrap.className = 'apng-wrap';
+        wrap.appendChild(canvas);
+        wrap.appendChild(controls);
+        img.replaceWith(wrap);
+      }
       img.dataset.apngEnhanced = 'done';
       render(0);
       play();
