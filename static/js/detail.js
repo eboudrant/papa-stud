@@ -291,8 +291,14 @@ function _renderDetail(scanId) {
   `;
   // Toggle and Slider are for frame-by-frame visual diffing — leave APNGs
   // paused so the user can scrub. Delta (single-image and strip) auto-plays.
+  // `scope` is the failure identity — re-renders within the same failure
+  // (Toggle T flip, view-mode switch) keep the current frame; navigating
+  // to a different failure resets to frame 0.
   if (window.papastudApng) {
-    window.papastudApng.enhanceAll(content, { autoplay: _viewMode === 'delta' });
+    window.papastudApng.enhanceAll(content, {
+      autoplay: _viewMode === 'delta',
+      scope: f.filename,
+    });
   }
 }
 

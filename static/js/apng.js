@@ -12,6 +12,16 @@
 (function () {
   const META_CACHE = new Map(); // path → {apng,frameCount,plays} promise
 
+  // Frame index survives intra-failure re-renders (Toggle T flip, view-mode
+  // tab switch) so the user keeps their position when the page rebuilds.
+  // Autoplay is one-shot: it fires exactly once per scope (the failure
+  // identity), so a Delta open auto-plays but subsequent renders — Toggle,
+  // Slider, or even returning to Delta — start paused, ready for frame-by-
+  // frame scrubbing. Both reset on scope change. See enhanceAll.
+  let SCOPE = null;
+  let SCOPE_IDX = 0;
+  let SCOPE_AUTOPLAY_FIRED = false;
+
   async function fetchMeta(imagePath) {
     if (META_CACHE.has(imagePath)) return META_CACHE.get(imagePath);
     const p = fetch('/api/images/meta?path=' + encodeURIComponent(imagePath))
@@ -60,7 +70,9 @@
   // clamps to its own last frame past its end.
   function createClock() {
     const subs = []; // { ctx, frames, width, height }
-    let idx = 0;
+    // Resume at the last frame the same failure was sitting on; the index
+    // is later clamped per-canvas based on each sub's own frame count.
+    let idx = SCOPE_IDX;
     let maxFrames = 0;
     let playing = false;
     let timer = null;
@@ -78,6 +90,7 @@
     function setIdx(v) {
       if (!maxFrames) return;
       idx = ((v % maxFrames) + maxFrames) % maxFrames;
+      SCOPE_IDX = idx;
       renderAll();
       emit('change', idx, maxFrames);
     }
@@ -103,6 +116,9 @@
       add(sub) {
         subs.push(sub);
         if (sub.frames.length > maxFrames) maxFrames = sub.frames.length;
+        // Stale SCOPE_IDX from a longer previous animation could exceed the
+        // new maxFrames — clamp so the scrub bar reads correctly.
+        if (idx >= maxFrames) { idx = maxFrames - 1; SCOPE_IDX = idx; }
         // Render the new sub at the current idx so it joins in sync.
         const i = Math.min(idx, sub.frames.length - 1);
         sub.ctx.putImageData(new ImageData(sub.frames[i].data, sub.width, sub.height), 0, 0);
@@ -230,11 +246,25 @@
       img.dataset.apngEnhanced = 'done';
     }));
 
-    if (clock && autoplay) clock.play();
+    // One-shot autoplay: Delta's first render in a new scope plays once;
+    // Toggle, Slider, and any later Delta re-render start paused so the
+    // user can scrub frame-by-frame.
+    if (clock && autoplay && !SCOPE_AUTOPLAY_FIRED) {
+      clock.play();
+      SCOPE_AUTOPLAY_FIRED = true;
+    }
   }
 
   function enhanceAll(root = document, opts = {}) {
     if (!window.UPNG) return;
+    // Reset the resume point + autoplay budget when the failure identity
+    // changes; preserve the resume point for intra-failure re-renders so
+    // the user keeps their frame when flipping Toggle (T) or view modes.
+    if (opts.scope !== undefined && opts.scope !== SCOPE) {
+      SCOPE = opts.scope;
+      SCOPE_IDX = 0;
+      SCOPE_AUTOPLAY_FIRED = false;
+    }
     // Process each `.detail-fullview` independently so each gets its own clock.
     // If the root itself is the fullview (or has no fullview children), treat
     // it as a single scope.
