@@ -396,6 +396,12 @@ select.input { appearance: auto; }
   color: var(--text-dim); text-align: center; flex: 0 0 auto;
 }
 
+/* While apng.js is deciding whether an <img> is APNG (and decoding it if
+   so), hide the element so the browser doesn't paint frame 0 of the source
+   APNG before the canvas swap lands. Plain PNGs reveal themselves the
+   instant the meta endpoint says `apng:false`. */
+img[data-apng-enhanced="pending"] { visibility: hidden; }
+
 /* APNG canvas + controls — wraps any <img> whose source is an APNG */
 .apng-wrap {
   display: flex; flex-direction: column; align-items: center; min-height: 0;

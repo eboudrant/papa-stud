@@ -165,6 +165,11 @@ function _renderDetail(scanId) {
   const actualSrc = f.actual_path
     ? `/api/images?path=${encodeURIComponent(f.actual_path)}`
     : (isComposite ? sliceSrc(2) : '');
+  // `apngHide` is baked into every <img> that points at /api/images so the
+  // browser doesn't paint frame 0 of an animated PNG between innerHTML and
+  // the apng.js canvas swap. CSS reveals plain PNGs the instant the meta
+  // endpoint confirms they're not APNG.
+  const apngHide = 'data-apng-enhanced="pending"';
   // When actual is missing (e.g., figma handler only writes delta), use delta as fallback
   const effectiveActual = actualSrc || deltaSrc;
   const hasDelta = !!deltaSrc;
@@ -217,15 +222,15 @@ function _renderDetail(scanId) {
     if (stripDelta) {
       viewContent = `<div class="detail-fullview">
           <div class="delta-strip">
-            <div class="delta-strip-cell"><div class="delta-strip-label">Expected</div><img src="${goldenSrc}"></div>
-            <div class="delta-strip-cell"><div class="delta-strip-label">Diff</div><img src="${stripDeltaSrc}"></div>
-            <div class="delta-strip-cell"><div class="delta-strip-label">Actual</div><img src="${actualSrc}"></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Expected</div><img src="${goldenSrc}" ${apngHide}></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Diff</div><img src="${stripDeltaSrc}" ${apngHide}></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Actual</div><img src="${actualSrc}" ${apngHide}></div>
           </div>
         </div>`;
     } else {
       viewContent = deltaSrc
         ? `<div class="detail-fullview">
-            <div class="detail-view-area" id="view-area"><img src="${deltaSrc}" id="detail-img"></div>
+            <div class="detail-view-area" id="view-area"><img src="${deltaSrc}" id="detail-img" ${apngHide}></div>
             ${zoomBar}
           </div>`
         : '<div class="pane-empty">No delta image</div>';
@@ -237,7 +242,7 @@ function _renderDetail(scanId) {
       ? `<div class="detail-fullview">
           <div class="detail-view-area" id="view-area">
             <div class="toggle-label">${title} <span class="label-hint">press T to toggle</span></div>
-            <img src="${src}" id="detail-img">
+            <img src="${src}" id="detail-img" ${apngHide}>
           </div>
           ${zoomBar}
         </div>`
@@ -246,8 +251,8 @@ function _renderDetail(scanId) {
     viewContent = (goldenSrc && actualSrc)
       ? `<div class="detail-fullview">
           <div class="slider-viewport" id="slider-viewport">
-            <img src="${actualSrc}" class="slider-base" id="slider-actual">
-            <img src="${goldenSrc}" class="slider-base" id="slider-golden">
+            <img src="${actualSrc}" class="slider-base" id="slider-actual" ${apngHide}>
+            <img src="${goldenSrc}" class="slider-base" id="slider-golden" ${apngHide}>
             <div class="slider-handle" id="slider-handle" style="left:50%"></div>
           </div>
           <div class="slider-labels">

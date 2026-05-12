@@ -214,8 +214,12 @@
   }
 
   async function enhanceFullview(fullview, { autoplay = true } = {}) {
+    // detail.js renders /api/images imgs with `data-apng-enhanced="pending"`
+    // baked in so the CSS hide is synchronous with the innerHTML swap (no
+    // window where the browser can paint frame 0 of an APNG). We still
+    // re-mark here for any imgs not pre-marked by the caller.
     const imgs = [...fullview.querySelectorAll('img[src*="/api/images"]')]
-      .filter(i => i.dataset.apngEnhanced !== 'done' && i.dataset.apngEnhanced !== 'pending');
+      .filter(i => i.dataset.apngEnhanced !== 'done');
     if (!imgs.length) return;
     imgs.forEach(i => { i.dataset.apngEnhanced = 'pending'; });
 
