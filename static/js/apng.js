@@ -21,6 +21,12 @@
   let SCOPE = null;
   let SCOPE_IDX = 0;
   let SCOPE_AUTOPLAY_FIRED = false;
+  // Clocks from prior renders that may still have pending setTimeouts. When
+  // detail.js replaces `content.innerHTML`, the old canvases detach but the
+  // tick is still in flight — if we don't stop it, the ghost clock advances
+  // SCOPE_IDX, and the freshly-built clock hydrates from that bumped value
+  // (turning Toggle's T flip into a frame jump).
+  const ACTIVE_CLOCKS = new Set();
 
   async function fetchMeta(imagePath) {
     if (META_CACHE.has(imagePath)) return META_CACHE.get(imagePath);
@@ -112,7 +118,7 @@
       timer = setTimeout(() => { setIdx(idx + 1); tick(); }, currentDelay());
     }
 
-    return {
+    const clock = {
       add(sub) {
         subs.push(sub);
         if (sub.frames.length > maxFrames) maxFrames = sub.frames.length;
@@ -136,12 +142,22 @@
         if (timer) { clearTimeout(timer); timer = null; }
         emit('playState', false);
       },
+      // Permanently stop the clock so an in-flight setTimeout from a prior
+      // render can't bump SCOPE_IDX after the canvases have been detached.
+      dispose() {
+        playing = false;
+        if (timer) { clearTimeout(timer); timer = null; }
+        subs.length = 0;
+        ACTIVE_CLOCKS.delete(clock);
+      },
       setIdx,
       get idx() { return idx; },
       get maxFrames() { return maxFrames; },
       get playing() { return playing; },
       on(name, fn) { listeners[name].push(fn); },
     };
+    ACTIVE_CLOCKS.add(clock);
+    return clock;
   }
 
   // Wire one shared control bar to a clock. Returns the bar element.
@@ -257,6 +273,9 @@
 
   function enhanceAll(root = document, opts = {}) {
     if (!window.UPNG) return;
+    // Stop any clocks left over from the previous render before they advance
+    // SCOPE_IDX from under us.
+    for (const c of ACTIVE_CLOCKS) c.dispose();
     // Reset the resume point + autoplay budget when the failure identity
     // changes; preserve the resume point for intra-failure re-renders so
     // the user keeps their frame when flipping Toggle (T) or view modes.
