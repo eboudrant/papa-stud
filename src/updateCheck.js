@@ -1,4 +1,11 @@
 // Only runs when PAPASTUD_VERSION is set (Electron main sets it when packaged).
+//
+// Uses the GitHub releases atom feed at `github.com/<repo>/releases.atom`
+// rather than the REST API. The feed has no rate limit, needs no auth, and
+// returns the same data we need. The REST `api.github.com` endpoint is
+// limited to 60 unauthenticated requests/hour per IP — easy to hit on a
+// shared corp egress, after which every user on that IP gets a silent
+// 403 and no upgrade banner.
 
 const https = require('https');
 
@@ -13,8 +20,8 @@ let _inflight = null;
 
 function _fetchLatestRelease() {
   return new Promise((resolve, reject) => {
-    const req = https.get(`https://api.github.com/repos/${REPO}/releases/latest`, {
-      headers: { 'User-Agent': 'papa-stud-update-check', 'Accept': 'application/vnd.github+json' },
+    const req = https.get(`https://github.com/${REPO}/releases.atom`, {
+      headers: { 'User-Agent': 'papa-stud-update-check', 'Accept': 'application/atom+xml' },
       timeout: REQUEST_TIMEOUT,
     }, (res) => {
       if (res.statusCode !== 200) {
@@ -25,12 +32,24 @@ function _fetchLatestRelease() {
       res.setEncoding('utf8');
       res.on('data', (c) => { body += c; });
       res.on('end', () => {
-        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+        try { resolve(_parseAtomLatest(body)); } catch (e) { reject(e); }
       });
     });
     req.on('error', reject);
     req.on('timeout', () => { req.destroy(new Error('timeout')); });
   });
+}
+
+// Extract the newest release from an atom feed. Entries are ordered newest
+// first; the first <entry> wins. Returns `{ tag_name, html_url }` to match
+// the shape the rest of the module expects from the old REST response.
+function _parseAtomLatest(xml) {
+  const entry = xml.match(/<entry\b[\s\S]*?<\/entry>/);
+  if (!entry) throw new Error('atom: no entries');
+  const titleMatch = entry[0].match(/<title>([^<]+)<\/title>/);
+  const linkMatch = entry[0].match(/<link\s+[^>]*href="([^"]+)"/);
+  if (!titleMatch) throw new Error('atom: no title');
+  return { tag_name: titleMatch[1].trim(), html_url: linkMatch ? linkMatch[1] : null };
 }
 
 function _parseVersion(v) {
@@ -83,4 +102,4 @@ async function checkForUpdate() {
   return _inflight;
 }
 
-module.exports = { checkForUpdate };
+module.exports = { checkForUpdate, _parseAtomLatest };
