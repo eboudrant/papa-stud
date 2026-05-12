@@ -402,6 +402,11 @@ select.input { appearance: auto; }
    instant the meta endpoint says `apng:false`. */
 img[data-apng-enhanced="pending"] { visibility: hidden; }
 
+/* Toggle mode renders both Expected and Actual panels at once and flips
+   which is visible via this class — no re-render means no load gap and no
+   flicker when pressing T, even on APNGs that take a moment to decode. */
+.toggle-hidden { display: none !important; }
+
 /* APNG canvas + controls — wraps any <img> whose source is an APNG */
 .apng-wrap {
   display: flex; flex-direction: column; align-items: center; min-height: 0;

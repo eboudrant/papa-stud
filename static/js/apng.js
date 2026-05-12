@@ -193,6 +193,14 @@
     if (img.id) canvas.id = img.id;
     if (img.className) canvas.className = img.className;
     canvas.style.cssText = img.style.cssText;
+    // Carry data-* attributes (e.g. data-toggle-title) so callers wired to
+    // them keep working post-swap. Skip the apng-loading marker — once we're
+    // a canvas, we want to be visible.
+    for (const attr of img.attributes) {
+      if (attr.name.startsWith('data-') && attr.name !== 'data-apng-enhanced') {
+        canvas.setAttribute(attr.name, attr.value);
+      }
+    }
     // Pan/zoom and slider code reads naturalWidth/Height/complete — shim
     // them so swapping in a canvas doesn't require touching those paths.
     canvas.naturalWidth = width;

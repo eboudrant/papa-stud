@@ -88,7 +88,8 @@ function showDetail(scanId, filename) {
       case 't': case 'T':
         if (_viewMode !== 'toggle') {
           _setViewMode('toggle', scanId);
-        } else {
+        } else if (!_flipTogglePanels()) {
+          // Single-source toggle (rare edge case): fall back to a full re-render.
           const saved = { ..._panZoom };
           const savedFit = _fitScale;
           _toggleShowing = _toggleShowing === 'golden' ? 'actual' : 'golden';
@@ -236,17 +237,35 @@ function _renderDetail(scanId) {
         : '<div class="pane-empty">No delta image</div>';
     }
   } else if (_viewMode === 'toggle') {
-    const src = _toggleShowing === 'golden' ? goldenSrc : effectiveActual;
-    const title = _toggleShowing === 'golden' ? 'Expected (Golden)' : (actualSrc ? 'Actual' : 'Delta');
-    viewContent = src
-      ? `<div class="detail-fullview">
+    const showingGolden = _toggleShowing === 'golden';
+    const actualLabel = actualSrc ? 'Actual' : 'Delta';
+    const title = showingGolden ? 'Expected (Golden)' : actualLabel;
+    // Render BOTH panels in the DOM so pressing T can flip their visibility
+    // in place — no re-render, no load gap, no flicker. Each becomes a
+    // canvas that the shared apng clock keeps in sync; only one is
+    // displayed at a time.
+    const haveBoth = goldenSrc && effectiveActual;
+    if (haveBoth) {
+      viewContent = `<div class="detail-fullview">
           <div class="detail-view-area" id="view-area">
-            <div class="toggle-label">${title} <span class="label-hint">press T to toggle</span></div>
-            <img src="${src}" id="detail-img" ${apngHide}>
+            <div class="toggle-label" id="toggle-label">${title} <span class="label-hint">press T to toggle</span></div>
+            <img src="${goldenSrc}" class="toggle-img toggle-golden${showingGolden ? '' : ' toggle-hidden'}" data-toggle-title="Expected (Golden)"${showingGolden ? ' id="detail-img"' : ''} ${apngHide}>
+            <img src="${effectiveActual}" class="toggle-img toggle-actual${showingGolden ? ' toggle-hidden' : ''}" data-toggle-title="${actualLabel}"${showingGolden ? '' : ' id="detail-img"'} ${apngHide}>
           </div>
           ${zoomBar}
-        </div>`
-      : `<div class="pane-empty">No ${_toggleShowing} image</div>`;
+        </div>`;
+    } else {
+      const src = showingGolden ? goldenSrc : effectiveActual;
+      viewContent = src
+        ? `<div class="detail-fullview">
+            <div class="detail-view-area" id="view-area">
+              <div class="toggle-label">${title} <span class="label-hint">press T to toggle</span></div>
+              <img src="${src}" id="detail-img" ${apngHide}>
+            </div>
+            ${zoomBar}
+          </div>`
+        : `<div class="pane-empty">No ${_toggleShowing} image</div>`;
+    }
   } else if (_viewMode === 'slider') {
     viewContent = (goldenSrc && actualSrc)
       ? `<div class="detail-fullview">
@@ -337,6 +356,32 @@ function _setViewMode(mode, scanId) {
   _renderDetail(scanId);
   if (mode === 'slider') _initSliderDrag();
   else _initPanZoom();
+}
+
+// In-place flip of the Toggle panels when both are rendered. Returns true if
+// the flip happened (the caller then skips the heavy re-render path). The
+// canvases sit stacked in `.detail-view-area`, both driven by the shared
+// apng clock — switching is just a class + id swap, no load gap or
+// decode, so no flicker even with APNGs that take a while to decode.
+function _flipTogglePanels() {
+  const golden = document.querySelector('.toggle-golden');
+  const actual = document.querySelector('.toggle-actual');
+  if (!golden || !actual) return false;
+  _toggleShowing = _toggleShowing === 'golden' ? 'actual' : 'golden';
+  const showingGolden = _toggleShowing === 'golden';
+  golden.classList.toggle('toggle-hidden', !showingGolden);
+  actual.classList.toggle('toggle-hidden', showingGolden);
+  // Pan/zoom code reads getElementById('detail-img'); keep it on whichever
+  // canvas is currently visible.
+  if (showingGolden) { actual.id = ''; golden.id = 'detail-img'; }
+  else { golden.id = ''; actual.id = 'detail-img'; }
+  const label = document.getElementById('toggle-label');
+  if (label) {
+    const visible = showingGolden ? golden : actual;
+    const title = visible.dataset.toggleTitle || (showingGolden ? 'Expected (Golden)' : 'Actual');
+    label.firstChild.textContent = title + ' ';
+  }
+  return true;
 }
 
 let _sliderDragging = false;
