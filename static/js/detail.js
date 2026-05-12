@@ -678,6 +678,10 @@ function _applyPanZoom() {
   if (!img) return;
   const t = `translate(${_panZoom.ox}px, ${_panZoom.oy}px) scale(${_panZoom.scale})`;
   img.style.transform = t;
+  // Toggle mode renders both Expected and Actual panels at once; apply the
+  // same transform to the hidden sibling so T flips don't expose an
+  // un-centered canvas at the origin.
+  for (const el of document.querySelectorAll('.toggle-img')) el.style.transform = t;
   // In slider mode, apply same transform to golden image
   const golden = document.getElementById('slider-golden');
   if (golden) golden.style.transform = t;
