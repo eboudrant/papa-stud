@@ -310,5 +310,16 @@
     for (const fv of fullviews) enhanceFullview(fv, opts);
   }
 
-  window.papastudApng = { enhanceAll };
+  // Toggle play/pause on every active clock — if any is playing, all pause;
+  // otherwise all play. Returns true if at least one clock responded (so the
+  // caller can preventDefault on the keypress), false on static-PNG pages.
+  function toggle() {
+    if (ACTIVE_CLOCKS.size === 0) return false;
+    let anyPlaying = false;
+    for (const c of ACTIVE_CLOCKS) { if (c.playing) { anyPlaying = true; break; } }
+    for (const c of ACTIVE_CLOCKS) { anyPlaying ? c.pause() : c.play(); }
+    return true;
+  }
+
+  window.papastudApng = { enhanceAll, toggle };
 })();

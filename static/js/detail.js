@@ -85,6 +85,11 @@ function showDetail(scanId, filename) {
           _acceptBaseline(scanId, _detailFailure.filename);
         }
         break;
+      case ' ':
+        // Space toggles APNG playback when an animation is rendered. Falls
+        // through silently for static-PNG failures.
+        if (window.papastudApng?.toggle()) e.preventDefault();
+        break;
       case 't': case 'T':
         if (_viewMode !== 'toggle') {
           _setViewMode('toggle', scanId);
@@ -310,7 +315,7 @@ function _renderDetail(scanId) {
         ${escHtml(f.filename)}
         <button class="btn-copy" onclick="_copyPath('${escAttr(f.delta_path || '')}', this)" title="Copy absolute path">copy</button>
       </div>
-      <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  &larr;=prev  &rarr;=next  ${canAccept ? 'Enter=accept  ' : ''}esc=back</div>
+      <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  Space=play/pause  &larr;=prev  &rarr;=next  ${canAccept ? 'Enter=accept  ' : ''}esc=back</div>
     </div>
   `;
   // Toggle and Slider are for frame-by-frame visual diffing — leave APNGs
