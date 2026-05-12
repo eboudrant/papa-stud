@@ -396,6 +396,50 @@ select.input { appearance: auto; }
   color: var(--text-dim); text-align: center; flex: 0 0 auto;
 }
 
+/* While apng.js is deciding whether an <img> is APNG (and decoding it if
+   so), hide the element so the browser doesn't paint frame 0 of the source
+   APNG before the canvas swap lands. Plain PNGs reveal themselves the
+   instant the meta endpoint says `apng:false`. */
+img[data-apng-enhanced="pending"] { visibility: hidden; }
+
+/* Toggle mode renders both Expected and Actual panels at once and flips
+   which is visible via this class — no re-render means no load gap and no
+   flicker when pressing T, even on APNGs that take a moment to decode. */
+.toggle-hidden { display: none !important; }
+
+/* APNG canvas + controls — wraps any <img> whose source is an APNG */
+.apng-wrap {
+  display: flex; flex-direction: column; align-items: center; min-height: 0;
+  flex: 1; max-width: 100%; max-height: 100%; gap: 6px;
+}
+.apng-wrap canvas {
+  flex: 1; min-height: 0; max-width: 100%; max-height: 100%;
+  object-fit: contain; display: block; margin: 0 auto;
+}
+.apng-controls {
+  display: flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  padding: 4px 8px; border-radius: 6px; background: var(--bg-inset);
+  font-size: 12px; color: var(--text-dim); user-select: none;
+}
+/* When the controls sit inside the existing zoom bar (Toggle / Slider /
+   non-strip Delta), drop the chip styling so they read as part of that bar. */
+.zoom-controls .apng-controls {
+  padding: 0; background: transparent; border-radius: 0; gap: 6px;
+}
+/* Standalone bar for delta-strip mode (no .zoom-controls in DOM). */
+.apng-strip-bar {
+  flex: 0 0 auto; display: flex; justify-content: center;
+  padding: 6px 12px; border-top: 1px solid var(--border); background: var(--bg);
+}
+.apng-btn {
+  background: transparent; border: 1px solid var(--border, #ddd);
+  border-radius: 4px; padding: 2px 8px; font-size: 13px; line-height: 1;
+  cursor: pointer; color: var(--text);
+}
+.apng-btn:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); }
+.apng-scrub { flex: 1 1 80px; min-width: 60px; max-width: 200px; cursor: pointer; }
+.apng-count { font-variant-numeric: tabular-nums; min-width: 50px; text-align: right; }
+
 /* Slider mode */
 .slider-viewport {
   flex: 1; min-height: 0; position: relative; overflow: hidden;

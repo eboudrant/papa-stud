@@ -85,10 +85,16 @@ function showDetail(scanId, filename) {
           _acceptBaseline(scanId, _detailFailure.filename);
         }
         break;
+      case ' ':
+        // Space toggles APNG playback when an animation is rendered. Falls
+        // through silently for static-PNG failures.
+        if (window.papastudApng?.toggle()) e.preventDefault();
+        break;
       case 't': case 'T':
         if (_viewMode !== 'toggle') {
           _setViewMode('toggle', scanId);
-        } else {
+        } else if (!_flipTogglePanels()) {
+          // Single-source toggle (rare edge case): fall back to a full re-render.
           const saved = { ..._panZoom };
           const savedFit = _fitScale;
           _toggleShowing = _toggleShowing === 'golden' ? 'actual' : 'golden';
@@ -151,9 +157,25 @@ function _renderDetail(scanId) {
   const f = _detailFailure;
   const content = document.getElementById('content');
 
-  const goldenSrc = f.golden_path ? `/api/images?path=${encodeURIComponent(f.golden_path)}` : '';
+  // Paparazzi-style profiles emit a single composite delta with
+  // [expected | diff | actual] side-by-side. When that's all we have, fall
+  // back to per-panel slices of the composite so Toggle / Slider / Strip
+  // can still show "Expected" and "Actual" cleanly. The slice endpoint
+  // serves a cropped PNG/APNG.
+  const isComposite = !!f.delta_path && !f.golden_path && !f.actual_path;
+  const sliceSrc = (n) => `/api/images/slice?path=${encodeURIComponent(f.delta_path)}&n=${n}&of=3`;
+  const goldenSrc = f.golden_path
+    ? `/api/images?path=${encodeURIComponent(f.golden_path)}`
+    : (isComposite ? sliceSrc(0) : '');
   const deltaSrc = f.delta_path ? `/api/images?path=${encodeURIComponent(f.delta_path)}` : '';
-  const actualSrc = f.actual_path ? `/api/images?path=${encodeURIComponent(f.actual_path)}` : '';
+  const actualSrc = f.actual_path
+    ? `/api/images?path=${encodeURIComponent(f.actual_path)}`
+    : (isComposite ? sliceSrc(2) : '');
+  // `apngHide` is baked into every <img> that points at /api/images so the
+  // browser doesn't paint frame 0 of an animated PNG between innerHTML and
+  // the apng.js canvas swap. CSS reveals plain PNGs the instant the meta
+  // endpoint confirms they're not APNG.
+  const apngHide = 'data-apng-enhanced="pending"';
   // When actual is missing (e.g., figma handler only writes delta), use delta as fallback
   const effectiveActual = actualSrc || deltaSrc;
   const hasDelta = !!deltaSrc;
@@ -195,44 +217,66 @@ function _renderDetail(scanId) {
   }
 
   if (_viewMode === 'delta') {
-    // For tools whose delta is a raw pixel-diff (swift-snapshot), compose the
-    // 3-panel strip client-side so reviewers see expected/diff/actual at once,
-    // matching Roborazzi/Paparazzi's already-composited delta.
-    const stripDelta = f.delta_kind === 'pixel-diff' && goldenSrc && deltaSrc;
+    // Render a labeled 3-panel strip whenever we have separate Expected / Diff
+    // / Actual frames — either because the tool emitted three files (swift-
+    // snapshot's pixel-diff) or because we sliced its single composite delta
+    // (Paparazzi / HML renderer).
+    const stripFromComposite = isComposite;
+    const stripDeltaSrc = stripFromComposite ? sliceSrc(1) : deltaSrc;
+    const stripDelta = (f.delta_kind === 'pixel-diff' || stripFromComposite)
+      && goldenSrc && stripDeltaSrc && actualSrc;
     if (stripDelta) {
       viewContent = `<div class="detail-fullview">
           <div class="delta-strip">
-            <div class="delta-strip-cell"><div class="delta-strip-label">Expected</div><img src="${goldenSrc}"></div>
-            <div class="delta-strip-cell"><div class="delta-strip-label">Diff</div><img src="${deltaSrc}"></div>
-            <div class="delta-strip-cell"><div class="delta-strip-label">Actual</div><img src="${actualSrc}"></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Expected</div><img src="${goldenSrc}" ${apngHide}></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Diff</div><img src="${stripDeltaSrc}" ${apngHide}></div>
+            <div class="delta-strip-cell"><div class="delta-strip-label">Actual</div><img src="${actualSrc}" ${apngHide}></div>
           </div>
         </div>`;
     } else {
       viewContent = deltaSrc
         ? `<div class="detail-fullview">
-            <div class="detail-view-area" id="view-area"><img src="${deltaSrc}" id="detail-img"></div>
+            <div class="detail-view-area" id="view-area"><img src="${deltaSrc}" id="detail-img" ${apngHide}></div>
             ${zoomBar}
           </div>`
         : '<div class="pane-empty">No delta image</div>';
     }
   } else if (_viewMode === 'toggle') {
-    const src = _toggleShowing === 'golden' ? goldenSrc : effectiveActual;
-    const title = _toggleShowing === 'golden' ? 'Expected (Golden)' : (actualSrc ? 'Actual' : 'Delta');
-    viewContent = src
-      ? `<div class="detail-fullview">
+    const showingGolden = _toggleShowing === 'golden';
+    const actualLabel = actualSrc ? 'Actual' : 'Delta';
+    const title = showingGolden ? 'Expected (Golden)' : actualLabel;
+    // Render BOTH panels in the DOM so pressing T can flip their visibility
+    // in place — no re-render, no load gap, no flicker. Each becomes a
+    // canvas that the shared apng clock keeps in sync; only one is
+    // displayed at a time.
+    const haveBoth = goldenSrc && effectiveActual;
+    if (haveBoth) {
+      viewContent = `<div class="detail-fullview">
           <div class="detail-view-area" id="view-area">
-            <div class="toggle-label">${title} <span class="label-hint">press T to toggle</span></div>
-            <img src="${src}" id="detail-img">
+            <div class="toggle-label" id="toggle-label">${title} <span class="label-hint">press T to toggle</span></div>
+            <img src="${goldenSrc}" class="toggle-img toggle-golden${showingGolden ? '' : ' toggle-hidden'}" data-toggle-title="Expected (Golden)"${showingGolden ? ' id="detail-img"' : ''} ${apngHide}>
+            <img src="${effectiveActual}" class="toggle-img toggle-actual${showingGolden ? ' toggle-hidden' : ''}" data-toggle-title="${actualLabel}"${showingGolden ? '' : ' id="detail-img"'} ${apngHide}>
           </div>
           ${zoomBar}
-        </div>`
-      : `<div class="pane-empty">No ${_toggleShowing} image</div>`;
+        </div>`;
+    } else {
+      const src = showingGolden ? goldenSrc : effectiveActual;
+      viewContent = src
+        ? `<div class="detail-fullview">
+            <div class="detail-view-area" id="view-area">
+              <div class="toggle-label">${title} <span class="label-hint">press T to toggle</span></div>
+              <img src="${src}" id="detail-img" ${apngHide}>
+            </div>
+            ${zoomBar}
+          </div>`
+        : `<div class="pane-empty">No ${_toggleShowing} image</div>`;
+    }
   } else if (_viewMode === 'slider') {
     viewContent = (goldenSrc && actualSrc)
       ? `<div class="detail-fullview">
           <div class="slider-viewport" id="slider-viewport">
-            <img src="${actualSrc}" class="slider-base" id="slider-actual">
-            <img src="${goldenSrc}" class="slider-base" id="slider-golden">
+            <img src="${actualSrc}" class="slider-base" id="slider-actual" ${apngHide}>
+            <img src="${goldenSrc}" class="slider-base" id="slider-golden" ${apngHide}>
             <div class="slider-handle" id="slider-handle" style="left:50%"></div>
           </div>
           <div class="slider-labels">
@@ -271,9 +315,20 @@ function _renderDetail(scanId) {
         ${escHtml(f.filename)}
         <button class="btn-copy" onclick="_copyPath('${escAttr(f.delta_path || '')}', this)" title="Copy absolute path">copy</button>
       </div>
-      <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  &larr;=prev  &rarr;=next  ${canAccept ? 'Enter=accept  ' : ''}esc=back</div>
+      <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  Space=play/pause  &larr;=prev  &rarr;=next  ${canAccept ? 'Enter=accept  ' : ''}esc=back</div>
     </div>
   `;
+  // Toggle and Slider are for frame-by-frame visual diffing — leave APNGs
+  // paused so the user can scrub. Delta (single-image and strip) auto-plays.
+  // `scope` is the failure identity — re-renders within the same failure
+  // (Toggle T flip, view-mode switch) keep the current frame; navigating
+  // to a different failure resets to frame 0.
+  if (window.papastudApng) {
+    window.papastudApng.enhanceAll(content, {
+      autoplay: _viewMode === 'delta',
+      scope: f.filename,
+    });
+  }
 }
 
 function _diffColor(pct) {
@@ -306,6 +361,32 @@ function _setViewMode(mode, scanId) {
   _renderDetail(scanId);
   if (mode === 'slider') _initSliderDrag();
   else _initPanZoom();
+}
+
+// In-place flip of the Toggle panels when both are rendered. Returns true if
+// the flip happened (the caller then skips the heavy re-render path). The
+// canvases sit stacked in `.detail-view-area`, both driven by the shared
+// apng clock — switching is just a class + id swap, no load gap or
+// decode, so no flicker even with APNGs that take a while to decode.
+function _flipTogglePanels() {
+  const golden = document.querySelector('.toggle-golden');
+  const actual = document.querySelector('.toggle-actual');
+  if (!golden || !actual) return false;
+  _toggleShowing = _toggleShowing === 'golden' ? 'actual' : 'golden';
+  const showingGolden = _toggleShowing === 'golden';
+  golden.classList.toggle('toggle-hidden', !showingGolden);
+  actual.classList.toggle('toggle-hidden', showingGolden);
+  // Pan/zoom code reads getElementById('detail-img'); keep it on whichever
+  // canvas is currently visible.
+  if (showingGolden) { actual.id = ''; golden.id = 'detail-img'; }
+  else { golden.id = ''; actual.id = 'detail-img'; }
+  const label = document.getElementById('toggle-label');
+  if (label) {
+    const visible = showingGolden ? golden : actual;
+    const title = visible.dataset.toggleTitle || (showingGolden ? 'Expected (Golden)' : 'Actual');
+    label.firstChild.textContent = title + ' ';
+  }
+  return true;
 }
 
 let _sliderDragging = false;
@@ -602,6 +683,10 @@ function _applyPanZoom() {
   if (!img) return;
   const t = `translate(${_panZoom.ox}px, ${_panZoom.oy}px) scale(${_panZoom.scale})`;
   img.style.transform = t;
+  // Toggle mode renders both Expected and Actual panels at once; apply the
+  // same transform to the hidden sibling so T flips don't expose an
+  // un-centered canvas at the origin.
+  for (const el of document.querySelectorAll('.toggle-img')) el.style.transform = t;
   // In slider mode, apply same transform to golden image
   const golden = document.getElementById('slider-golden');
   if (golden) golden.style.transform = t;
