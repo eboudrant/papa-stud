@@ -289,7 +289,11 @@ function _renderDetail(scanId) {
       <div class="detail-shortcuts">E=cycle mode  ${_viewMode === 'toggle' ? 'T=toggle  ' : ''}WASD/IJKL=navigate  R=reset  &larr;=prev  &rarr;=next  ${canAccept ? 'Enter=accept  ' : ''}esc=back</div>
     </div>
   `;
-  if (window.papastudApng) window.papastudApng.enhanceAll(content);
+  // Toggle and Slider are for frame-by-frame visual diffing — leave APNGs
+  // paused so the user can scrub. Delta (single-image and strip) auto-plays.
+  if (window.papastudApng) {
+    window.papastudApng.enhanceAll(content, { autoplay: _viewMode === 'delta' });
+  }
 }
 
 function _diffColor(pct) {

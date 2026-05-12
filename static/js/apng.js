@@ -181,7 +181,7 @@
     fullview.appendChild(wrap);
   }
 
-  async function enhanceFullview(fullview) {
+  async function enhanceFullview(fullview, { autoplay = true } = {}) {
     const imgs = [...fullview.querySelectorAll('img[src*="/api/images"]')]
       .filter(i => i.dataset.apngEnhanced !== 'done' && i.dataset.apngEnhanced !== 'pending');
     if (!imgs.length) return;
@@ -230,10 +230,10 @@
       img.dataset.apngEnhanced = 'done';
     }));
 
-    if (clock) clock.play();
+    if (clock && autoplay) clock.play();
   }
 
-  function enhanceAll(root = document) {
+  function enhanceAll(root = document, opts = {}) {
     if (!window.UPNG) return;
     // Process each `.detail-fullview` independently so each gets its own clock.
     // If the root itself is the fullview (or has no fullview children), treat
@@ -243,10 +243,10 @@
       : [...root.querySelectorAll('.detail-fullview')];
     if (fullviews.length === 0) {
       // Root has no .detail-fullview — fall back to whole-root scope.
-      enhanceFullview(root);
+      enhanceFullview(root, opts);
       return;
     }
-    for (const fv of fullviews) enhanceFullview(fv);
+    for (const fv of fullviews) enhanceFullview(fv, opts);
   }
 
   window.papastudApng = { enhanceAll };
