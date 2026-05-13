@@ -93,19 +93,45 @@ async function _loadReviewPage(scanId) {
   if (_activeSort) params.set('sort', _activeSort);
   if (_searchQuery) params.set('q', _searchQuery);
 
-  _scanData = await apiGet(`/api/scans/${scanId}?${params}`);
-  setNavContext({ projectName: _scanData.projectName });
-  _currentPage = 0;
-  _allFailures = _scanData.failures;
-  _hasMore = _allFailures.length < _scanData.totalFiltered;
+  try {
+    _scanData = await apiGet(`/api/scans/${scanId}?${params}`);
+    setNavContext({ projectName: _scanData.projectName });
+    _currentPage = 0;
+    _allFailures = _scanData.failures;
+    _hasMore = _allFailures.length < _scanData.totalFiltered;
 
-  _renderProfilePills(_scanData);
-  const sortEl = document.getElementById('sort-select');
-  if (sortEl && _activeSort) sortEl.value = _activeSort;
-  _renderSidebar(_scanData);
-  _renderGrid();
-  _updateCounter();
-  _loading = false;
+    _renderProfilePills(_scanData);
+    const sortEl = document.getElementById('sort-select');
+    if (sortEl && _activeSort) sortEl.value = _activeSort;
+    _renderSidebar(_scanData);
+    _renderGrid();
+    _updateCounter();
+  } catch (err) {
+    // Without this catch the UI would silently half-render: the toolbar
+    // and nav stay (rendered synchronously in showReview), but the sidebar
+    // and grid never populate and no error reaches the user. Common
+    // triggers: scan deleted/replaced under us (404 from a stale link),
+    // server crash mid-write, or a renderer throwing on a malformed row.
+    _renderReviewError(scanId, err);
+  } finally {
+    _loading = false;
+  }
+}
+
+function _renderReviewError(scanId, err) {
+  const msg = (err && err.message) || String(err);
+  const grid = document.getElementById('thumbnail-grid');
+  if (grid) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div>Couldn't load this scan.</div>
+        <div class="error-detail">${escHtml(msg)}</div>
+        <div style="margin-top:12px"><button class="btn" onclick="_loadReviewPage('${escAttr(scanId)}')">Retry</button> <a class="btn" href="#/">Home</a></div>
+      </div>`;
+  }
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar) sidebar.innerHTML = '';
+  console.error('[review] load failed:', err);
 }
 
 async function _loadMoreFailures(scanId) {
@@ -118,14 +144,21 @@ async function _loadMoreFailures(scanId) {
   if (_activeSort) params.set('sort', _activeSort);
   if (_searchQuery) params.set('q', _searchQuery);
 
-  const data = await apiGet(`/api/scans/${scanId}?${params}`);
-  _scanData.stats = data.stats;
-  _allFailures = _allFailures.concat(data.failures);
-  _hasMore = _allFailures.length < data.totalFiltered;
+  try {
+    const data = await apiGet(`/api/scans/${scanId}?${params}`);
+    _scanData.stats = data.stats;
+    _allFailures = _allFailures.concat(data.failures);
+    _hasMore = _allFailures.length < data.totalFiltered;
 
-  _appendGrid(data.failures);
-  _updateCounter();
-  _loading = false;
+    _appendGrid(data.failures);
+    _updateCounter();
+  } catch (err) {
+    // Stop the infinite scroll from hammering a failing endpoint.
+    _hasMore = false;
+    console.error('[review] page load failed:', err);
+  } finally {
+    _loading = false;
+  }
 }
 
 function _renderSidebar(data) {

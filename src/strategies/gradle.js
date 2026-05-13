@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { agp9Sibling } = require('../scanner');
+const { agp9Sibling } = require('../paparazziPaths');
 
 const BUILD_ALLOWED = new Set(['paparazzi', 'test-results', 'outputs']);
 const OUTPUT_ALLOWED = new Set(['roborazzi', 'screenshotTest-results']);
