@@ -18,19 +18,7 @@ const log = (...args) => { if (DEBUG) console.log(...args); };
 const MTIME_CLUSTER_TOLERANCE = 60.0;
 
 const { getStrategy } = require('./strategies');
-
-// Paparazzi's source-set conventions before vs after AGP 9 + KMP. Goldens
-// moved from `src/test/snapshots/...` to `src/androidHostTest/snapshots/...`;
-// failure outputs and JUnit paths are unchanged. Centralized so the rewrite
-// rule is in one place and the literals don't drift across scanner / watcher.
-const LEGACY_PAPARAZZI_PREFIX = 'src/test/snapshots/';
-const AGP9_PAPARAZZI_PREFIX = 'src/androidHostTest/snapshots/';
-
-function agp9Sibling(s) {
-  return s && s.includes(LEGACY_PAPARAZZI_PREFIX)
-    ? s.replace(LEGACY_PAPARAZZI_PREFIX, AGP9_PAPARAZZI_PREFIX)
-    : null;
-}
+const { agp9Sibling } = require('./paparazziPaths');
 
 function scanProject(projectPath, strategyName, opts = {}) {
   const result = { modules: [], failures: [] };
@@ -421,6 +409,5 @@ module.exports = {
   buildGoldenPatterns,
   withAgp9Fallback,
   effectiveGoldenDirs,
-  agp9Sibling,
   detectCurrentFailures,
 };

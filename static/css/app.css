@@ -470,6 +470,7 @@ img[data-apng-enhanced="pending"] { visibility: hidden; }
 
 /* Empty state */
 .empty-state { padding: 48px; text-align: center; color: var(--text-dim); font-size: 14px; }
+.empty-state .error-detail { margin-top: 8px; color: var(--danger); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-word; }
 .detail-loading { padding: 48px; text-align: center; color: var(--text-dim); }
 
 /* Settings */
