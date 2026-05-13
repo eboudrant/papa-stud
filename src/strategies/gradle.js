@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { agp9Sibling } = require('../scanner');
 
 const BUILD_ALLOWED = new Set(['paparazzi', 'test-results', 'outputs']);
 const OUTPUT_ALLOWED = new Set(['roborazzi', 'screenshotTest-results']);
@@ -88,10 +89,15 @@ function getWatchDirs(modulePath, profiles) {
   if (profiles) {
     for (const p of profiles) {
       dirs.add(path.join(modulePath, p.failures_dir));
-      if (p.golden_dir) dirs.add(path.join(modulePath, p.golden_dir));
+      if (p.golden_dir) {
+        dirs.add(path.join(modulePath, p.golden_dir));
+        const sibling = agp9Sibling(p.golden_dir);
+        if (sibling) dirs.add(path.join(modulePath, sibling));
+      }
     }
   } else {
     dirs.add(path.join(modulePath, 'src', 'test', 'snapshots', 'images'));
+    dirs.add(path.join(modulePath, 'src', 'androidHostTest', 'snapshots', 'images'));
   }
   return dirs;
 }

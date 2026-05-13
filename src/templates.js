@@ -18,8 +18,13 @@ const BUILTIN_TEMPLATES = [
     builtin: true,
     description: 'Paparazzi',
     failures_dir: 'build/paparazzi/failures',
+    // Both patterns are first-class; a project may hold legacy (AGP <9) and
+    // AGP-9 / KMP modules side by side.
     golden_dir: 'src/test/snapshots/images',
-    golden_patterns: ['src/test/snapshots/images/{name}.png'],
+    golden_patterns: [
+      'src/test/snapshots/images/{name}.png',
+      'src/androidHostTest/snapshots/images/{name}.png',
+    ],
     delta_prefix: 'delta-',
     delta_suffix: '',
     actual_suffix: '',
