@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { agp9Sibling } = require('../scanner');
 
 const BUILD_ALLOWED = new Set(['paparazzi', 'test-results', 'outputs']);
 const OUTPUT_ALLOWED = new Set(['roborazzi', 'screenshotTest-results']);
@@ -90,10 +91,8 @@ function getWatchDirs(modulePath, profiles) {
       dirs.add(path.join(modulePath, p.failures_dir));
       if (p.golden_dir) {
         dirs.add(path.join(modulePath, p.golden_dir));
-        // Watch the AGP-9 sibling too — same module can hold either layout.
-        if (p.golden_dir.includes('src/test/snapshots/')) {
-          dirs.add(path.join(modulePath, p.golden_dir.replace('src/test/snapshots/', 'src/androidHostTest/snapshots/')));
-        }
+        const sibling = agp9Sibling(p.golden_dir);
+        if (sibling) dirs.add(path.join(modulePath, sibling));
       }
     }
   } else {

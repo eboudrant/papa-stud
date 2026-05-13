@@ -18,10 +18,8 @@ const BUILTIN_TEMPLATES = [
     builtin: true,
     description: 'Paparazzi',
     failures_dir: 'build/paparazzi/failures',
-    // Goldens moved from src/test/snapshots/images/ (legacy AGP <9) to
-    // src/androidHostTest/snapshots/images/ (AGP 9 / KMP). Failure outputs
-    // stayed put. We list both patterns so a project with either layout
-    // resolves cleanly; modules can also be a mix during a migration.
+    // Both patterns are first-class; a project may hold legacy (AGP <9) and
+    // AGP-9 / KMP modules side by side.
     golden_dir: 'src/test/snapshots/images',
     golden_patterns: [
       'src/test/snapshots/images/{name}.png',

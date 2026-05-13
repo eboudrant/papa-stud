@@ -19,6 +19,19 @@ const MTIME_CLUSTER_TOLERANCE = 60.0;
 
 const { getStrategy } = require('./strategies');
 
+// Paparazzi's source-set conventions before vs after AGP 9 + KMP. Goldens
+// moved from `src/test/snapshots/...` to `src/androidHostTest/snapshots/...`;
+// failure outputs and JUnit paths are unchanged. Centralized so the rewrite
+// rule is in one place and the literals don't drift across scanner / watcher.
+const LEGACY_PAPARAZZI_PREFIX = 'src/test/snapshots/';
+const AGP9_PAPARAZZI_PREFIX = 'src/androidHostTest/snapshots/';
+
+function agp9Sibling(s) {
+  return s && s.includes(LEGACY_PAPARAZZI_PREFIX)
+    ? s.replace(LEGACY_PAPARAZZI_PREFIX, AGP9_PAPARAZZI_PREFIX)
+    : null;
+}
+
 function scanProject(projectPath, strategyName, opts = {}) {
   const result = { modules: [], failures: [] };
   for (const [phase, data] of scanProjectIncrementalSync(projectPath, null, null, strategyName, opts)) {
@@ -86,13 +99,13 @@ function processModuleFromPrecomputed(moduleName, modulePath, profiles, precompu
   let totalSnapshots = 0;
   let goldenPath = modulePath;
   if (profiles && profiles.length) {
+    let primaryDirs = null;
     for (const p of profiles) {
-      for (const d of effectiveGoldenDirs(modulePath, p.golden_dir)) {
-        totalSnapshots += countPngsRecursive(d);
-      }
+      const dirs = effectiveGoldenDirs(modulePath, p.golden_dir);
+      if (primaryDirs === null) primaryDirs = dirs;
+      for (const d of dirs) totalSnapshots += countPngsRecursive(d);
     }
-    const primary = effectiveGoldenDirs(modulePath, profiles[0].golden_dir)[0];
-    if (primary) goldenPath = primary;
+    if (primaryDirs && primaryDirs[0]) goldenPath = primaryDirs[0];
   }
 
   const moduleData = {
@@ -107,25 +120,28 @@ function processModuleFromPrecomputed(moduleName, modulePath, profiles, precompu
   return [moduleData, moduleFailures];
 }
 
-// Return the on-disk golden directories worth inspecting for a module. The
-// legacy AGP <9 `src/test/snapshots/*` path and its AGP-9 sibling
-// `src/androidHostTest/snapshots/*` are both considered, in whichever order
-// places the existing one first (so callers using only the first entry get
-// a useful report). When neither exists, fall back to whatever the profile
-// said.
+// On-disk golden directories worth inspecting for a module. Returns the
+// configured directory plus its AGP-9 sibling when both exist, only the
+// existing one when one exists, or `[configured]` as a fallback for
+// empty/missing modules so callers using the first entry always get a
+// reportable path.
 function effectiveGoldenDirs(modulePath, goldenDir) {
   if (!goldenDir) return [];
   const primary = path.join(modulePath, goldenDir);
-  const agp9 = goldenDir.includes('src/test/snapshots/')
-    ? path.join(modulePath, goldenDir.replace('src/test/snapshots/', 'src/androidHostTest/snapshots/'))
-    : null;
+  const sibling = agp9Sibling(goldenDir);
+  const agp9 = sibling ? path.join(modulePath, sibling) : null;
   const existing = [primary, agp9].filter(d => d && safeIsDir(d));
-  if (existing.length) return existing;
-  return [primary];
+  return existing.length ? existing : [primary];
 }
 
 function safeIsDir(p) {
   try { return fs.statSync(p).isDirectory(); } catch { return false; }
+}
+
+// Sum the PNG counts across every effective golden dir for the module.
+function totalGoldenPngs(modulePath, goldenDir) {
+  return effectiveGoldenDirs(modulePath, goldenDir)
+    .reduce((n, d) => n + countPngsRecursive(d), 0);
 }
 
 function processSingleModule(failuresDir, moduleName, modulePath, profiles, strategyName) {
@@ -136,8 +152,14 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles, stra
   const moduleFailures = [];
   const profileCounts = {};
   let totalSnapshots = 0;
+  let primaryGoldenDir = null;
 
-  if (profiles && profiles.length) {
+  const hasProfiles = profiles && profiles.length;
+  const goldenDirForReport = hasProfiles
+    ? profiles[0].golden_dir
+    : 'src/test/snapshots/images';
+
+  if (hasProfiles) {
     for (const profile of profiles) {
       const pname = profile.name;
       const fDir = path.join(modulePath, profile.failures_dir);
@@ -151,9 +173,9 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles, stra
       );
       moduleFailures.push(...pf);
       profileCounts[pname] = pf.length;
-      for (const d of effectiveGoldenDirs(modulePath, profile.golden_dir)) {
-        totalSnapshots += countPngsRecursive(d);
-      }
+      const dirs = effectiveGoldenDirs(modulePath, profile.golden_dir);
+      if (primaryGoldenDir === null) primaryGoldenDir = dirs[0] || null;
+      for (const d of dirs) totalSnapshots += countPngsRecursive(d);
     }
   } else {
     const defaultGp = withAgp9Fallback(['src/test/snapshots/images/{name}.png']);
@@ -163,15 +185,13 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles, stra
     );
     moduleFailures.push(...pf);
     profileCounts.baseline = pf.length;
-    for (const d of effectiveGoldenDirs(modulePath, 'src/test/snapshots/images')) {
-      totalSnapshots += countPngsRecursive(d);
-    }
+    const dirs = effectiveGoldenDirs(modulePath, goldenDirForReport);
+    primaryGoldenDir = dirs[0] || null;
+    for (const d of dirs) totalSnapshots += countPngsRecursive(d);
   }
 
-  const reportedGolden = profiles && profiles.length
-    ? (effectiveGoldenDirs(modulePath, profiles[0].golden_dir)[0]
-       || path.join(modulePath, profiles[0].golden_dir || 'src/test/snapshots/images'))
-    : effectiveGoldenDirs(modulePath, 'src/test/snapshots/images')[0];
+  const reportedGolden = primaryGoldenDir
+    || path.join(modulePath, goldenDirForReport || 'src/test/snapshots/images');
 
   const moduleData = {
     name: moduleName,
@@ -186,33 +206,25 @@ function processSingleModule(failuresDir, moduleName, modulePath, profiles, stra
 }
 
 function buildGoldenPatterns(profile) {
-  const raw = profile.golden_patterns
-    ? [...profile.golden_patterns]
-    : (() => {
-        const gDir = profile.golden_dir || '';
-        const suffix = profile.golden_suffix || '';
-        const p = [];
-        if (suffix) p.push(`${gDir}/{name}${suffix}.png`);
-        p.push(`${gDir}/{name}.png`);
-        return p;
-      })();
+  if (profile.golden_patterns) return withAgp9Fallback([...profile.golden_patterns]);
+  const gDir = profile.golden_dir || '';
+  const suffix = profile.golden_suffix || '';
+  const raw = [];
+  if (suffix) raw.push(`${gDir}/{name}${suffix}.png`);
+  raw.push(`${gDir}/{name}.png`);
   return withAgp9Fallback(raw);
 }
 
-// Paparazzi moved the goldens from `src/test/snapshots/...` (legacy AGP <9)
-// to `src/androidHostTest/snapshots/...` (AGP 9 / KMP). Profiles that still
-// hold the legacy pattern would resolve to null on a migrated module — add
-// the AGP-9 sibling so both layouts work without forcing every project to
-// rewrite its persisted profile.
+// Pair every legacy Paparazzi pattern with its AGP-9 sibling so a profile
+// persisted with only the old `src/test/snapshots/` path still resolves
+// against a migrated module.
 function withAgp9Fallback(patterns) {
   const out = [];
   const seen = new Set();
   for (const p of patterns) {
     if (!seen.has(p)) { out.push(p); seen.add(p); }
-    if (p.includes('src/test/snapshots/')) {
-      const agp9 = p.replace('src/test/snapshots/', 'src/androidHostTest/snapshots/');
-      if (!seen.has(agp9)) { out.push(agp9); seen.add(agp9); }
-    }
+    const sibling = agp9Sibling(p);
+    if (sibling && !seen.has(sibling)) { out.push(sibling); seen.add(sibling); }
   }
   return out;
 }
@@ -238,8 +250,7 @@ function processProfile(
   deltaPrefix = 'delta-', deltaSuffix = '', actualSuffix = '',
 ) {
   const results = [];
-  if (!failuresDir) return results;
-  try { if (!fs.statSync(failuresDir).isDirectory()) return results; } catch { return results; }
+  if (!failuresDir || !safeIsDir(failuresDir)) return results;
 
   let current = detectCurrentFailures(failuresDir, deltaPrefix, deltaSuffix);
   log(`[scan] ${profileName} in ${failuresDir}: ${current.length} candidates, xmlMtime=${xmlMtime}, testStats.failed=${testStats?.failed}`);
@@ -410,5 +421,6 @@ module.exports = {
   buildGoldenPatterns,
   withAgp9Fallback,
   effectiveGoldenDirs,
+  agp9Sibling,
   detectCurrentFailures,
 };
