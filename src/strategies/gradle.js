@@ -88,10 +88,17 @@ function getWatchDirs(modulePath, profiles) {
   if (profiles) {
     for (const p of profiles) {
       dirs.add(path.join(modulePath, p.failures_dir));
-      if (p.golden_dir) dirs.add(path.join(modulePath, p.golden_dir));
+      if (p.golden_dir) {
+        dirs.add(path.join(modulePath, p.golden_dir));
+        // Watch the AGP-9 sibling too — same module can hold either layout.
+        if (p.golden_dir.includes('src/test/snapshots/')) {
+          dirs.add(path.join(modulePath, p.golden_dir.replace('src/test/snapshots/', 'src/androidHostTest/snapshots/')));
+        }
+      }
     }
   } else {
     dirs.add(path.join(modulePath, 'src', 'test', 'snapshots', 'images'));
+    dirs.add(path.join(modulePath, 'src', 'androidHostTest', 'snapshots', 'images'));
   }
   return dirs;
 }

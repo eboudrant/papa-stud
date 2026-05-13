@@ -3,7 +3,16 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { detectCurrentFailures, deltaToBase, resolveGolden, processSingleModule, scanProject } = require('../../src/scanner');
+const {
+  detectCurrentFailures,
+  deltaToBase,
+  resolveGolden,
+  processSingleModule,
+  scanProject,
+  buildGoldenPatterns,
+  withAgp9Fallback,
+  effectiveGoldenDirs,
+} = require('../../src/scanner');
 const { discoverModules: discoverGradleModules } = require('../../src/strategies/gradle');
 const { listTemplates, getTemplate, templateToProfile } = require('../../src/templates');
 
@@ -306,6 +315,77 @@ describe('roborazzi naming', () => {
     const result = resolveGolden(root, ['src/goldens/**/{name}.png'], 'testMethod.png');
     assert.ok(result !== null);
     assert.ok(result.includes('TestClass'));
+  });
+
+  describe('AGP 9 fallback', () => {
+    it('withAgp9Fallback appends the androidHostTest sibling', () => {
+      assert.deepEqual(
+        withAgp9Fallback(['src/test/snapshots/images/{name}.png']),
+        [
+          'src/test/snapshots/images/{name}.png',
+          'src/androidHostTest/snapshots/images/{name}.png',
+        ],
+      );
+    });
+
+    it('withAgp9Fallback dedupes when both are already present', () => {
+      const out = withAgp9Fallback([
+        'src/test/snapshots/images/{name}.png',
+        'src/androidHostTest/snapshots/images/{name}.png',
+      ]);
+      assert.equal(out.length, 2);
+    });
+
+    it('withAgp9Fallback leaves non-Paparazzi patterns untouched', () => {
+      assert.deepEqual(
+        withAgp9Fallback(['src/test/goldens/roborazzi/**/{name}.png']),
+        ['src/test/goldens/roborazzi/**/{name}.png'],
+      );
+    });
+
+    it('buildGoldenPatterns rescues a legacy-only Paparazzi profile', () => {
+      const profile = { golden_patterns: ['src/test/snapshots/images/{name}.png'] };
+      const out = buildGoldenPatterns(profile);
+      assert.ok(out.some(p => p.includes('androidHostTest')));
+      assert.ok(out.some(p => p.startsWith('src/test/')));
+    });
+
+    it('resolveGolden finds an AGP-9 golden via the fallback', () => {
+      const root = tmpdir;
+      const agp9 = path.join(root, 'src', 'androidHostTest', 'snapshots', 'images');
+      fs.mkdirSync(agp9, { recursive: true });
+      makePng(path.join(agp9, 'pkg_Cls_method.png'));
+      // Profile only knows the legacy pattern — buildGoldenPatterns extends it.
+      const profile = { golden_patterns: ['src/test/snapshots/images/{name}.png'] };
+      const patterns = buildGoldenPatterns(profile);
+      const found = resolveGolden(root, patterns, 'pkg_Cls_method.png');
+      assert.ok(found !== null);
+      assert.ok(found.includes('androidHostTest'));
+    });
+
+    it('effectiveGoldenDirs reports the on-disk layout', () => {
+      const root = tmpdir;
+      const agp9 = path.join(root, 'src', 'androidHostTest', 'snapshots', 'images');
+      fs.mkdirSync(agp9, { recursive: true });
+      const dirs = effectiveGoldenDirs(root, 'src/test/snapshots/images');
+      assert.equal(dirs.length, 1);
+      assert.ok(dirs[0].endsWith(path.join('androidHostTest', 'snapshots', 'images')));
+    });
+
+    it('effectiveGoldenDirs returns both when both exist', () => {
+      const root = tmpdir;
+      fs.mkdirSync(path.join(root, 'src', 'test', 'snapshots', 'images'), { recursive: true });
+      fs.mkdirSync(path.join(root, 'src', 'androidHostTest', 'snapshots', 'images'), { recursive: true });
+      const dirs = effectiveGoldenDirs(root, 'src/test/snapshots/images');
+      assert.equal(dirs.length, 2);
+    });
+
+    it('effectiveGoldenDirs falls back to the original when neither exists', () => {
+      const root = tmpdir;
+      const dirs = effectiveGoldenDirs(root, 'src/test/snapshots/images');
+      assert.equal(dirs.length, 1);
+      assert.ok(dirs[0].endsWith(path.join('test', 'snapshots', 'images')));
+    });
   });
 });
 
