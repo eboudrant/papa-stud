@@ -4,6 +4,8 @@ Screenshot failure reviewer for Android testing tools (Paparazzi, Roborazzi, Com
 
 Scans your Gradle project for screenshot test failures, shows delta/golden/actual images side-by-side with diff percentages, and lets you review them in a clean UI.
 
+https://github.com/user-attachments/assets/c8d35b14-fd80-4e6e-989f-63c041bea9a7
+
 <p>
   <img src="docs/assets/screenshots/home-dark.png" width="32%">
   <img src="docs/assets/screenshots/review-grid-dark.png" width="32%">
@@ -72,3 +74,7 @@ tests/             Unit tests + Playwright screenshot tests
 ## License
 
 MIT
+
+## Credits
+
+Demo soundtrack: [Homage to Daylight](https://projindigo.bandcamp.com/track/homage-to-daylight) by Proj Indigo.
