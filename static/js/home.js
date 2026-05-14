@@ -5,7 +5,7 @@ async function showHome() {
   content.innerHTML = `
     <div class="home">
       <div id="update-banner" style="display:none"></div>
-      <section class="section">
+      <section class="section" id="scans-section" style="display:none">
         <h2>Scans</h2>
         <div id="scans-list" class="card-list"></div>
       </section>
@@ -61,6 +61,10 @@ async function _loadHome() {
   ]);
   _renderProjects(projectsList);
   _renderTemplates(templatesList);
+  // Scans only make sense once a project exists — keep the section hidden
+  // until then so a fresh install reads as "add a project" without noise.
+  const scansSection = document.getElementById('scans-section');
+  if (scansSection) scansSection.style.display = projectsList.length > 0 ? '' : 'none';
   _renderScans(scansList);
   _checkForUpdateOnce();
 }
