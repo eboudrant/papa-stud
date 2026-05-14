@@ -61,6 +61,12 @@ header nav a:hover { color: #e4e4e4; text-decoration: none; }
 .screenshot img { width: 100%; border-radius: 6px; border: 1px solid #2e2e2e; }
 .screenshot p { font-size: 11px; color: #666; margin-top: 4px; }
 
+.video-wrap {
+  width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #2e2e2e;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4); background: #000;
+}
+.video-wrap video { display: block; width: 100%; }
+
 .pre-wrap { position: relative; }
 .pre-wrap pre { margin: 0; }
 .btn-copy { position: absolute; top: 8px; right: 8px; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; background: #1e1e1e; border: 1px solid #2e2e2e; color: #a0a0a0; cursor: pointer; font-family: inherit; }
@@ -94,6 +100,15 @@ footer a { color: #a0a0a0; }
 
 <section class="hero">
   <p class="reveal">Screenshot failure reviewer for Android testing tools. Scans your Gradle project and lets you review failures side-by-side.</p>
+</section>
+
+<section id="demo">
+  <h2 class="reveal">Demo</h2>
+  <div class="video-wrap reveal">
+    <video
+      src="https://github.com/user-attachments/assets/c8d35b14-fd80-4e6e-989f-63c041bea9a7"
+      controls preload="metadata" playsinline></video>
+  </div>
 </section>
 
 <section id="features">
@@ -134,6 +149,7 @@ brew install --cask papastud</pre>
     <a href="https://github.com/eboudrant/papa-stud/releases">Releases</a>
   </div>
   <p>Papa Stud.io</p>
+  <p style="margin-top:8px; font-size:11px;">Demo soundtrack: <a href="https://projindigo.bandcamp.com/track/homage-to-daylight">Homage to Daylight</a> by Proj Indigo.</p>
 </footer>
 
 <script>
