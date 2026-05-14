@@ -6,6 +6,17 @@
 <title>Papa Stud.io</title>
 <meta name="description" content="Screenshot failure reviewer for Android testing tools">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://eboudrant.github.io/papa-stud/">
+<meta property="og:title" content="Papa Stud.io">
+<meta property="og:description" content="Screenshot failure reviewer for Android testing tools. Scans your Gradle project and lets you review failures side-by-side.">
+<meta property="og:image" content="https://eboudrant.github.io/papa-stud/assets/og-poster.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Papa Stud.io">
+<meta name="twitter:description" content="Screenshot failure reviewer for Android testing tools. Scans your Gradle project and lets you review failures side-by-side.">
+<meta name="twitter:image" content="https://eboudrant.github.io/papa-stud/assets/og-poster.jpg">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -61,11 +72,12 @@ header nav a:hover { color: #e4e4e4; text-decoration: none; }
 .screenshot img { width: 100%; border-radius: 6px; border: 1px solid #2e2e2e; }
 .screenshot p { font-size: 11px; color: #666; margin-top: 4px; }
 
-.video-wrap {
-  width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #2e2e2e;
+.demo video {
+  display: block; width: 100%; border-radius: 8px; border: 1px solid #2e2e2e;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4); background: #000;
 }
-.video-wrap video { display: block; width: 100%; }
+
+.footer-credit { margin-top: 8px; font-size: 11px; }
 
 .pre-wrap { position: relative; }
 .pre-wrap pre { margin: 0; }
@@ -102,13 +114,11 @@ footer a { color: #a0a0a0; }
   <p class="reveal">Screenshot failure reviewer for Android testing tools. Scans your Gradle project and lets you review failures side-by-side.</p>
 </section>
 
-<section id="demo">
+<section id="demo" class="demo">
   <h2 class="reveal">Demo</h2>
-  <div class="video-wrap reveal">
-    <video
-      src="https://github.com/user-attachments/assets/c8d35b14-fd80-4e6e-989f-63c041bea9a7"
-      controls preload="metadata" playsinline></video>
-  </div>
+  <video class="reveal"
+    src="https://github.com/user-attachments/assets/c8d35b14-fd80-4e6e-989f-63c041bea9a7"
+    controls preload="metadata" playsinline></video>
 </section>
 
 <section id="features">
@@ -134,9 +144,9 @@ brew install --cask papastud</pre>
 <section id="screenshots">
   <h2 class="reveal">Screenshots</h2>
   <div class="screenshots-grid reveal">
-    <div class="screenshot"><img src="assets/screenshots/home-dark.png" alt="Home"><p>Home</p></div>
-    <div class="screenshot"><img src="assets/screenshots/review-grid-dark.png" alt="Review"><p>Review</p></div>
-    <div class="screenshot"><img src="assets/screenshots/detail-dark.png" alt="Detail"><p>Detail</p></div>
+    <div class="screenshot"><img src="assets/screenshots/home-dark.png" alt="Home" width="600" height="483" loading="lazy"><p>Home</p></div>
+    <div class="screenshot"><img src="assets/screenshots/review-grid-dark.png" alt="Review" width="600" height="483" loading="lazy"><p>Review</p></div>
+    <div class="screenshot"><img src="assets/screenshots/detail-dark.png" alt="Detail" width="600" height="483" loading="lazy"><p>Detail</p></div>
   </div>
 </section>
 
@@ -149,7 +159,7 @@ brew install --cask papastud</pre>
     <a href="https://github.com/eboudrant/papa-stud/releases">Releases</a>
   </div>
   <p>Papa Stud.io</p>
-  <p style="margin-top:8px; font-size:11px;">Demo soundtrack: <a href="https://projindigo.bandcamp.com/track/homage-to-daylight">Homage to Daylight</a> by Proj Indigo.</p>
+  <p class="footer-credit">Demo soundtrack: <a href="https://projindigo.bandcamp.com/track/homage-to-daylight">Homage to Daylight</a> by Proj Indigo.</p>
 </footer>
 
 <script>
