@@ -201,13 +201,7 @@ header nav .nav-link { display: none; }
   position: relative;
 }
 .hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 14px 4px 5px;
-  border: 1px solid var(--border-strong);
-  background: rgba(255,255,255,0.02);
-  border-radius: 999px;
+  display: inline-block;
   font-size: 12px;
   color: var(--text-dim);
   margin-bottom: 28px;
@@ -529,34 +523,6 @@ footer .footer-links a:hover { color: var(--text); }
   html { scroll-behavior: auto; }
 }
 
-/* ---------- PASS / FAIL pills (app's visual signature) ---------- */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 2px 7px;
-  border-radius: 999px;
-  line-height: 1.4;
-  font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
-}
-.pill-fail {
-  background: rgba(248, 81, 73, 0.14);
-  color: #ff7b73;
-  box-shadow: inset 0 0 0 1px rgba(248, 81, 73, 0.3);
-}
-.pill-pass {
-  background: rgba(63, 185, 80, 0.14);
-  color: #5dd56e;
-  box-shadow: inset 0 0 0 1px rgba(63, 185, 80, 0.3);
-}
-.hero-badge .pill-arrow {
-  color: var(--text-faint);
-  font-size: 11px;
-  margin: 0 1px;
-}
-
 /* ---------- Viewfinder corner brackets on screenshot cards ---------- */
 .screenshot a::before,
 .screenshot a::after {
@@ -638,10 +604,7 @@ footer .footer-links a:hover { color: var(--text); }
   <h1 class="reveal">Review screenshot failures, <span class="accent accent-red">side</span>-by-<span class="accent accent-green">side.</span></h1>
   <p class="hero-sub reveal">A self-hosted desktop reviewer for Android screenshot tests. Scan your Gradle project, triage diffs in seconds, accept new baselines with one click.</p>
   <span class="hero-badge reveal">
-    <span class="pill pill-fail">FAIL</span>
-    <span class="pill-arrow" aria-hidden="true">&rarr;</span>
-    <span class="pill pill-pass">PASS</span>
-    &nbsp;Built for <a class="tool-link" href="https://github.com/cashapp/paparazzi" target="_blank" rel="noopener">Paparazzi</a>, <a class="tool-link" href="https://github.com/takahirom/roborazzi" target="_blank" rel="noopener">Roborazzi</a> &amp; <a class="tool-link" href="https://developer.android.com/studio/preview/compose-screenshot-testing" target="_blank" rel="noopener">Compose Screenshot Testing</a>
+    Built for <a class="tool-link" href="https://github.com/cashapp/paparazzi" target="_blank" rel="noopener">Paparazzi</a>, <a class="tool-link" href="https://github.com/takahirom/roborazzi" target="_blank" rel="noopener">Roborazzi</a> &amp; <a class="tool-link" href="https://developer.android.com/studio/preview/compose-screenshot-testing" target="_blank" rel="noopener">Compose Screenshot Testing</a>
   </span>
   <div class="hero-actions reveal">
     <a class="btn btn-primary" href="#install">Get started</a>
