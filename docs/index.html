@@ -69,8 +69,22 @@ header nav a:hover { color: #e4e4e4; text-decoration: none; }
 }
 
 .screenshots-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-.screenshot img { width: 100%; border-radius: 6px; border: 1px solid #2e2e2e; }
+.screenshot a { display: block; cursor: zoom-in; }
+.screenshot img { display: block; width: 100%; height: auto; }
 .screenshot p { font-size: 11px; color: #666; margin-top: 4px; }
+
+.lightbox {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+  display: none; align-items: center; justify-content: center;
+  padding: 32px; z-index: 100; cursor: zoom-out;
+}
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 100%; max-height: 100%; }
+.lightbox-close {
+  position: absolute; top: 16px; right: 20px; background: none; border: none;
+  color: #e4e4e4; font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px;
+}
+.lightbox-close:hover { color: #fff; }
 
 .demo video {
   display: block; width: 100%; border-radius: 8px; border: 1px solid #2e2e2e;
@@ -144,9 +158,9 @@ brew install --cask papastud</pre>
 <section id="screenshots">
   <h2 class="reveal">Screenshots</h2>
   <div class="screenshots-grid reveal">
-    <div class="screenshot"><img src="assets/screenshots/home-dark.png" alt="Home" width="600" height="483" loading="lazy"><p>Home</p></div>
-    <div class="screenshot"><img src="assets/screenshots/review-grid-dark.png" alt="Review" width="600" height="483" loading="lazy"><p>Review</p></div>
-    <div class="screenshot"><img src="assets/screenshots/detail-dark.png" alt="Detail" width="600" height="483" loading="lazy"><p>Detail</p></div>
+    <div class="screenshot"><a href="assets/screenshots/home-dark-full.png"><img src="assets/screenshots/home-dark.png" alt="Home" width="600" height="483" loading="lazy"></a><p>Home</p></div>
+    <div class="screenshot"><a href="assets/screenshots/review-grid-dark-full.png"><img src="assets/screenshots/review-grid-dark.png" alt="Review" width="600" height="483" loading="lazy"></a><p>Review</p></div>
+    <div class="screenshot"><a href="assets/screenshots/detail-dark-full.png"><img src="assets/screenshots/detail-dark.png" alt="Detail" width="600" height="483" loading="lazy"></a><p>Detail</p></div>
   </div>
 </section>
 
@@ -161,6 +175,11 @@ brew install --cask papastud</pre>
   <p>Papa Stud.io</p>
   <p class="footer-credit">Demo soundtrack: <a href="https://projindigo.bandcamp.com/track/homage-to-daylight">Homage to Daylight</a> by Proj Indigo.</p>
 </footer>
+
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" aria-label="Close">&times;</button>
+  <img alt="">
+</div>
 
 <script>
 function _copy(btn) {
@@ -181,6 +200,20 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
     if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth' }); }
   });
 });
+
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = lightbox.querySelector('img');
+function _closeLightbox() { lightbox.classList.remove('open'); lightboxImg.src = ''; }
+document.querySelectorAll('.screenshot a').forEach(a => {
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    lightboxImg.src = a.getAttribute('href');
+    lightboxImg.alt = a.querySelector('img').alt;
+    lightbox.classList.add('open');
+  });
+});
+lightbox.addEventListener('click', _closeLightbox);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && lightbox.classList.contains('open')) _closeLightbox(); });
 </script>
 </body>
 </html>
