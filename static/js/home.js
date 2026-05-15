@@ -182,6 +182,7 @@ function _renderTemplates(templatesList) {
         <span class="template-name">${escHtml(t.name)}</span>
         <span class="template-tool">${escHtml(t.tool)}</span>
         ${t.builtin ? '<span class="template-badge">built-in</span>' : ''}
+        ${t.beta ? '<span class="template-badge template-badge-beta">beta</span>' : ''}
       </div>
       <div class="template-list-detail">${escHtml(t.description)}</div>
       <div class="template-list-paths">
@@ -603,7 +604,7 @@ function _renderTemplateSelector(strategy) {
     <label class="template-card">
       <input type="checkbox" value="${escAttr(t.id)}" ${t.id === defaultId ? 'checked' : ''}>
       <div class="template-info">
-        <span class="template-name">${escHtml(t.name)}</span>
+        <span class="template-name">${escHtml(t.name)}${t.beta ? ' <span class="template-badge template-badge-beta">beta</span>' : ''}</span>
         <span class="template-tool">${escHtml(t.tool)}</span>
         <span class="template-desc">${escHtml(t.description)}</span>
       </div>

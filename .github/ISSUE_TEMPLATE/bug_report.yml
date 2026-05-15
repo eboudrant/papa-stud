@@ -1,0 +1,20 @@
+name: Bug report
+description: Something broken or behaving unexpectedly in Papa Stud
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug. Steps to reproduce and any logs are welcome.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Papa Stud version, macOS version, screenshot tool.
+      placeholder: Papa Stud 1.2.3 — macOS 14.5 — Paparazzi
+    validations:
+      required: false

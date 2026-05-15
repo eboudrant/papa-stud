@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const projects = require('../src/projects');
 const { createApp } = require('../src/handler');
 const { migrateDataFiles } = require('../src/dataMigration');
@@ -74,6 +75,15 @@ function createWindow() {
 
   mainWindow.loadURL(`http://127.0.0.1:${port}/?electron=1`);
   mainWindow.on('closed', () => { mainWindow = null; });
+
+  // External links (target="_blank") open in the user's default browser.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) {
+      require('electron').shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
 
   // Handle file downloads — save to Downloads folder
   mainWindow.webContents.session.on('will-download', (event, item) => {
@@ -156,6 +166,13 @@ function buildMenu() {
       label: 'Help',
       submenu: [
         {
+          label: 'Report a Bug',
+          click: () => {
+            require('electron').shell.openExternal(bugReportUrl());
+          },
+        },
+        { type: 'separator' },
+        {
           label: 'Open Log File',
           click: () => {
             const logFile = path.join(app.getPath('userData'), 'server.log');
@@ -199,6 +216,22 @@ function themeBgColor(theme) {
 
 ipcMain.handle('get-theme', () => readTheme());
 ipcMain.on('set-theme', (_, value) => writeTheme(value));
+
+function appInfo() {
+  return {
+    version: app.getVersion(),
+    platform: process.platform,
+    osRelease: os.release(),
+  };
+}
+
+function bugReportUrl() {
+  const info = appInfo();
+  const env = `Papa Stud ${info.version} — ${info.platform} ${info.osRelease}`;
+  return `https://github.com/eboudrant/papa-stud/issues/new?template=bug_report.yml&environment=${encodeURIComponent(env)}`;
+}
+
+ipcMain.handle('get-app-info', () => appInfo());
 
 let _dragStart = null;
 ipcMain.on('start-window-drag', (_, x, y) => {

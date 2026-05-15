@@ -60,6 +60,7 @@ const BUILTIN_TEMPLATES = [
     name: 'swift-snapshot-testing',
     tool: 'swift-snapshot',
     builtin: true,
+    beta: true,
     description: 'Point-Free',
     failures_dir: '',
     golden_dir: '__Snapshots__',

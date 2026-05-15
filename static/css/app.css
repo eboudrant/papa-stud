@@ -220,6 +220,8 @@ select.input { appearance: auto; }
 }
 .template-list-info { display: flex; align-items: center; gap: 8px; }
 .template-badge { font-size: 9px; font-weight: 600; color: var(--text-light); background: var(--bg); padding: 1px 6px; border-radius: 99px; }
+.template-badge-beta { color: #b07313; background: rgba(245, 158, 11, 0.15); letter-spacing: 0.04em; text-transform: uppercase; }
+[data-theme="dark"] .template-badge-beta { color: #f6b75a; background: rgba(245, 158, 11, 0.14); }
 .template-list-detail { font-size: 12px; color: var(--text-dim); flex: 1; }
 .template-list-paths { font-size: 11px; color: var(--text-light); display: flex; gap: 12px; }
 .template-list-paths code { font-size: 10px; background: var(--bg); padding: 1px 4px; border-radius: 3px; }
