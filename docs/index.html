@@ -17,173 +17,678 @@
 <meta name="twitter:title" content="Papa Stud.io">
 <meta name="twitter:description" content="Screenshot failure reviewer for Android testing tools. Scans your Gradle project and lets you review failures side-by-side.">
 <meta name="twitter:image" content="https://eboudrant.github.io/papa-stud/assets/og-poster.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+:root {
+  --bg: #0a0a0c;
+  --bg-elev: #111114;
+  --bg-elev-2: #16161a;
+  --border: #1f1f24;
+  --border-strong: #2a2a31;
+  --text: #ededee;
+  --text-dim: #9a9aa3;
+  --text-faint: #62626c;
+  --accent: #4d8eff;
+  --accent-hover: #6ba0ff;
+  --accent-soft: rgba(77, 142, 255, 0.12);
+  --accent-glow: rgba(77, 142, 255, 0.35);
+  --green: #3fb950;
+  --red: #f85149;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.35);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  background: #121212; color: #e4e4e4;
-  line-height: 1.6; -webkit-font-smoothing: antialiased;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
-a { color: #4d8eff; text-decoration: none; }
-a:hover { text-decoration: underline; }
-pre { background: #181818; border: 1px solid #2e2e2e; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; color: #a0a0a0; }
 
-.container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
-section { padding: 24px 0; }
-h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
-h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-p { color: #a0a0a0; font-size: 14px; }
-ul { list-style: none; margin-top: 4px; }
-ul li { font-size: 14px; color: #a0a0a0; padding: 2px 0; }
-ul li::before { content: '\2013'; color: #666; margin-right: 8px; }
-.title-io { font-weight: 300; color: #666; }
+/* Background atmosphere — a soft, restrained gradient blob behind the hero */
+body::before {
+  content: '';
+  position: fixed;
+  top: -240px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1100px;
+  height: 720px;
+  background:
+    radial-gradient(closest-side, rgba(77,142,255,0.18), transparent 70%),
+    radial-gradient(closest-side at 30% 60%, rgba(99,102,241,0.10), transparent 70%),
+    radial-gradient(closest-side at 70% 40%, rgba(120,80,200,0.08), transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: -1;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse at top, black 0%, transparent 60%);
+  -webkit-mask-image: radial-gradient(ellipse at top, black 0%, transparent 60%);
+  pointer-events: none;
+  z-index: -1;
+}
 
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #c9c9d1;
+}
+
+.container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+section { padding: 88px 0; }
+section + section { padding-top: 0; }
+
+h1, h2, h3 { font-family: inherit; letter-spacing: -0.015em; }
+
+.section-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.section-sub {
+  font-size: 15px;
+  color: var(--text-dim);
+  max-width: 560px;
+  margin-bottom: 32px;
+}
+
+p { color: var(--text-dim); }
+
+.title-io { font-weight: 300; color: var(--text-faint); }
+
+/* ---------- Header ---------- */
 header {
-  background: #1e1e1e; border-bottom: 1px solid #2e2e2e;
-  padding: 0 24px; height: 44px; display: flex; align-items: center;
-  position: sticky; top: 0; z-index: 10;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(10, 10, 12, 0.6);
+  backdrop-filter: saturate(140%) blur(14px);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+  border-bottom: 1px solid transparent;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
-header .container { display: flex; align-items: center; width: 100%; }
-header .logo { width: 22px; height: 22px; margin-right: 8px; }
-header h1 { font-size: 16px; display: flex; align-items: center; }
-header nav { display: flex; gap: 16px; margin-left: auto; }
-header nav a { font-size: 13px; font-weight: 500; color: #a0a0a0; }
-header nav a:hover { color: #e4e4e4; text-decoration: none; }
+header.scrolled {
+  background: rgba(10, 10, 12, 0.78);
+  border-bottom-color: var(--border);
+}
+header .container {
+  height: 56px;
+  display: flex;
+  align-items: center;
+}
+header .brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+header .logo { width: 22px; height: 22px; }
+header nav {
+  display: flex;
+  gap: 22px;
+  margin-left: auto;
+  align-items: center;
+}
+header nav a {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+header nav a:hover { color: var(--text); }
+header nav .nav-link { display: none; }
+@media (min-width: 700px) {
+  header nav .nav-link { display: inline-flex; }
+}
 
-.hero { padding-top: 48px; padding-bottom: 48px; text-align: center; }
-.hero h1 { font-size: 32px; margin-bottom: 8px; }
-.hero p { font-size: 22px; max-width: 600px; margin: 0 auto; line-height: 1.5; }
-.hero-actions { display: flex; gap: 8px; justify-content: center; margin-top: 24px; }
+/* ---------- Hero ---------- */
+.hero {
+  padding: 112px 0 96px;
+  text-align: center;
+  position: relative;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 8px;
+  border: 1px solid var(--border-strong);
+  background: rgba(255,255,255,0.02);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 28px;
+}
+.hero-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.18);
+}
+.hero h1 {
+  font-size: clamp(40px, 6vw, 64px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  margin: 0 auto 20px;
+  max-width: 820px;
+  background: linear-gradient(180deg, #ffffff 0%, #c5c5cd 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.hero h1 .accent {
+  background: linear-gradient(180deg, #6ba0ff 0%, #4d8eff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.hero-sub {
+  font-size: clamp(16px, 2vw, 19px);
+  line-height: 1.55;
+  color: var(--text-dim);
+  max-width: 620px;
+  margin: 0 auto 36px;
+}
+.hero-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 .btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 500;
-  text-decoration: none; border: 1px solid #2e2e2e; color: #e4e4e4; background: #1e1e1e;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  text-decoration: none;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  background: var(--bg-elev);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
-.btn:hover { border-color: #666; text-decoration: none; }
-.btn-primary { background: #4d8eff; color: white; border-color: #4d8eff; }
-.btn-primary:hover { background: #3a7be8; border-color: #3a7be8; }
-.hero img {
-  width: 100%; border-radius: 8px; border: 1px solid #2e2e2e;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+.btn:hover { border-color: #3a3a44; background: var(--bg-elev-2); color: var(--text); text-decoration: none; }
+.btn:active { transform: translateY(1px); }
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 24px -8px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.18);
 }
-
-.screenshots-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-.screenshot a { display: block; cursor: zoom-in; }
-.screenshot img { display: block; width: 100%; height: auto; }
-.screenshot p { font-size: 11px; color: #666; margin-top: 4px; }
-
-.lightbox {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.88);
-  display: none; align-items: center; justify-content: center;
-  padding: 32px; z-index: 100; cursor: zoom-out;
-}
-.lightbox.open { display: flex; }
-.lightbox img { max-width: 100%; max-height: 100%; }
-.lightbox-close {
-  position: absolute; top: 16px; right: 20px; background: none; border: none;
-  color: #e4e4e4; font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px;
-}
-.lightbox-close:hover { color: #fff; }
-
-.demo video {
-  display: block; width: 100%; border-radius: 8px; border: 1px solid #2e2e2e;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4); background: #000;
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+  box-shadow: 0 8px 30px -8px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.22);
 }
 
-.footer-credit { margin-top: 8px; font-size: 11px; }
+/* ---------- Demo ---------- */
+.demo-wrap {
+  position: relative;
+  border-radius: var(--radius-lg);
+  padding: 1px;
+  background: linear-gradient(180deg, rgba(77,142,255,0.35), rgba(77,142,255,0.05) 30%, var(--border) 100%);
+  box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7), 0 0 60px -20px var(--accent-glow);
+}
+.demo-wrap video {
+  display: block;
+  width: 100%;
+  border-radius: calc(var(--radius-lg) - 1px);
+  background: #000;
+}
 
+/* ---------- Features ---------- */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.feature-card {
+  position: relative;
+  padding: 22px 22px 20px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.005));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+.feature-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+.feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-bottom: 14px;
+  border: 1px solid rgba(77,142,255,0.18);
+}
+.feature-icon svg { display: block; }
+.feature-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.feature-card p {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+/* ---------- Install ---------- */
+.install-wrap {
+  max-width: 720px;
+}
+.install-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.install-tab {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.install-tab.active {
+  background: var(--bg-elev-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
 .pre-wrap { position: relative; }
 .pre-wrap pre { margin: 0; }
-.btn-copy { position: absolute; top: 8px; right: 8px; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; background: #1e1e1e; border: 1px solid #2e2e2e; color: #a0a0a0; cursor: pointer; font-family: inherit; }
-.btn-copy:hover { color: #e4e4e4; border-color: #666; }
+.btn-copy {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.btn-copy:hover { color: var(--text); border-color: #3a3a44; }
 
-footer { padding: 32px 0; border-top: 1px solid #2e2e2e; text-align: center; font-size: 12px; color: #666; }
-footer a { color: #a0a0a0; }
-.footer-links { display: flex; gap: 16px; justify-content: center; margin-bottom: 8px; }
+/* ---------- Screenshots ---------- */
+.screenshots-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.screenshot {
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.screenshot:hover {
+  transform: translateY(-3px);
+  border-color: rgba(77,142,255,0.35);
+  box-shadow: 0 20px 40px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(77,142,255,0.15);
+}
+.screenshot a {
+  display: block;
+  cursor: zoom-in;
+  position: relative;
+}
+.screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.screenshot p {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
 
-.reveal { opacity: 0; transform: translateY(12px); transition: opacity 0.4s ease, transform 0.4s ease; }
+@media (max-width: 800px) {
+  .screenshots-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Lightbox (unchanged behavior) ---------- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  z-index: 100;
+  cursor: zoom-out;
+}
+.lightbox.open { display: flex; }
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+}
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: inherit;
+}
+.lightbox-close:hover { background: rgba(255,255,255,0.1); }
+
+/* ---------- Footer ---------- */
+footer {
+  margin-top: 40px;
+  padding: 40px 0 48px;
+  border-top: 1px solid var(--border);
+}
+footer .container {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 24px;
+}
+footer .brand-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+}
+footer .brand-line img { width: 18px; height: 18px; }
+footer .footer-links {
+  display: flex;
+  gap: 18px;
+  font-size: 13px;
+}
+footer .footer-links a { color: var(--text-dim); }
+footer .footer-links a:hover { color: var(--text); }
+.footer-credit {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--text-faint);
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.footer-credit a { color: var(--text-dim); }
+.footer-credit a:hover { color: var(--text); }
+
+@media (max-width: 600px) {
+  footer .container { grid-template-columns: 1fr; }
+}
+
+/* ---------- Reveal animations ---------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
 .reveal.visible { opacity: 1; transform: none; }
 
-@media (max-width: 640px) {
-  .hero h1 { font-size: 24px; }
-  .install-grid { grid-template-columns: 1fr; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* ---------- Responsive tightening ---------- */
+@media (max-width: 700px) {
+  section { padding: 56px 0; }
+  .hero { padding: 80px 0 64px; }
+  .section-title { font-size: 24px; }
 }
 </style>
 </head>
 <body>
 
-<header>
+<header id="site-header">
   <div class="container">
-    <h1><img class="logo" src="favicon.svg" alt="">Papa Stud<span class="title-io">.io</span></h1>
+    <a class="brand" href="#top" aria-label="Papa Stud.io home">
+      <img class="logo" src="favicon.svg" alt="">
+      Papa Stud<span class="title-io">.io</span>
+    </a>
     <nav>
-      <a href="https://github.com/eboudrant/papa-stud" title="GitHub"><svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+      <a class="nav-link" href="#features">Features</a>
+      <a class="nav-link" href="#install">Install</a>
+      <a class="nav-link" href="#screenshots">Screenshots</a>
+      <a href="https://github.com/eboudrant/papa-stud" title="GitHub" aria-label="GitHub repository">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
     </nav>
   </div>
 </header>
 
+<a id="top"></a>
 <div class="container">
 
 <section class="hero">
-  <p class="reveal">Screenshot failure reviewer for Android testing tools. Scans your Gradle project and lets you review failures side-by-side.</p>
+  <span class="hero-badge reveal"><span class="dot"></span> Built for Paparazzi, Roborazzi &amp; Compose Screenshot Testing</span>
+  <h1 class="reveal">Review screenshot failures, <span class="accent">side-by-side.</span></h1>
+  <p class="hero-sub reveal">A self-hosted desktop reviewer for Android screenshot tests. Scan your Gradle project, triage diffs in seconds, accept new baselines with one click.</p>
   <div class="hero-actions reveal">
     <a class="btn btn-primary" href="#install">Get started</a>
     <a class="btn" href="https://github.com/eboudrant/papa-stud" target="_blank" rel="noopener">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25z"/></svg>
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25z"/></svg>
       Star on GitHub
     </a>
   </div>
 </section>
 
-<section id="demo" class="demo">
-  <h2 class="reveal">Demo</h2>
-  <video class="reveal"
-    src="https://github.com/user-attachments/assets/c8d35b14-fd80-4e6e-989f-63c041bea9a7"
-    controls preload="metadata" playsinline></video>
+<section id="demo">
+  <span class="section-eyebrow reveal">Demo</span>
+  <h2 class="section-title reveal">See it in action</h2>
+  <p class="section-sub reveal">Scan, diff, accept. The full triage loop in under a minute.</p>
+  <div class="demo-wrap reveal">
+    <video
+      src="https://github.com/user-attachments/assets/c8d35b14-fd80-4e6e-989f-63c041bea9a7"
+      poster="assets/og-poster.jpg"
+      controls preload="metadata" playsinline></video>
+  </div>
 </section>
 
 <section id="features">
-  <h2 class="reveal">Features</h2>
-  <ul class="reveal">
-    <li>Supports Paparazzi, Roborazzi, and Compose Screenshot Testing</li>
-    <li>Delta, toggle, and slider comparison modes with zoom and pan</li>
-    <li>Accept baseline — copy the rendered image over the golden with one click, or bulk accept a whole scan</li>
-    <li>Scans multi-module Gradle projects</li>
-    <li>Video export of failures</li>
-  </ul>
+  <span class="section-eyebrow reveal">Features</span>
+  <h2 class="section-title reveal">Everything you need to triage diffs</h2>
+  <p class="section-sub reveal">A focused toolkit, not a platform. Local-first, fast, and built around how Android engineers actually work.</p>
+  <div class="features-grid">
+    <div class="feature-card reveal">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      </div>
+      <h3>Three test frameworks</h3>
+      <p>Works out of the box with Paparazzi, Roborazzi, and Compose Screenshot Testing.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M12 3v18"/><circle cx="12" cy="12" r="9"/></svg>
+      </div>
+      <h3>Multiple diff modes</h3>
+      <p>Delta, toggle, and slider comparisons. Pinch-zoom and pan to inspect pixel-level differences.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      </div>
+      <h3>One-click accept</h3>
+      <p>Promote the rendered image over the golden, one failure at a time or in bulk for a whole scan.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18"/><path d="M3 12h18"/><path d="M3 17h12"/></svg>
+      </div>
+      <h3>Monorepo aware</h3>
+      <p>Scans multi-module Gradle projects, groups failures by module, and tracks status across rescans.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+      </div>
+      <h3>Video export</h3>
+      <p>Stitch a scan's failures into a short video — perfect for sharing diffs in PRs or design reviews.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><circle cx="12" cy="12" r="5"/></svg>
+      </div>
+      <h3>Live watch mode</h3>
+      <p>Keep a scan watching your build outputs — new failures show up the moment Gradle finishes.</p>
+    </div>
+  </div>
 </section>
 
 <section id="install">
-  <h2 class="reveal">Install</h2>
+  <span class="section-eyebrow reveal">Install</span>
+  <h2 class="section-title reveal">Up and running in seconds</h2>
+  <p class="section-sub reveal">macOS via Homebrew. Single command, no extra setup.</p>
   <div class="pre-wrap reveal">
     <pre>brew tap eboudrant/tap
 brew install --cask papastud</pre>
-    <button class="btn-copy" onclick="_copy(this)">Copy</button>
+    <button class="btn-copy" onclick="_copy(this)" aria-label="Copy install command">Copy</button>
   </div>
 </section>
 
 <section id="screenshots">
-  <h2 class="reveal">Screenshots</h2>
-  <div class="screenshots-grid reveal">
-    <div class="screenshot"><a href="assets/screenshots/home-dark-full.png"><img src="assets/screenshots/home-dark.png" alt="Home" width="600" height="483" loading="lazy"></a><p>Home</p></div>
-    <div class="screenshot"><a href="assets/screenshots/review-grid-dark-full.png"><img src="assets/screenshots/review-grid-dark.png" alt="Review" width="600" height="483" loading="lazy"></a><p>Review</p></div>
-    <div class="screenshot"><a href="assets/screenshots/detail-dark-full.png"><img src="assets/screenshots/detail-dark.png" alt="Detail" width="600" height="483" loading="lazy"></a><p>Detail</p></div>
+  <span class="section-eyebrow reveal">Screenshots</span>
+  <h2 class="section-title reveal">A focused, dark-first interface</h2>
+  <p class="section-sub reveal">Built for long review sessions. Click any screenshot to expand.</p>
+  <div class="screenshots-grid">
+    <div class="screenshot reveal">
+      <a href="assets/screenshots/home-dark-full.png"><img src="assets/screenshots/home-dark.png" alt="Home" width="600" height="483" loading="lazy"></a>
+      <p>Home</p>
+    </div>
+    <div class="screenshot reveal">
+      <a href="assets/screenshots/review-grid-dark-full.png"><img src="assets/screenshots/review-grid-dark.png" alt="Review" width="600" height="483" loading="lazy"></a>
+      <p>Review</p>
+    </div>
+    <div class="screenshot reveal">
+      <a href="assets/screenshots/detail-dark-full.png"><img src="assets/screenshots/detail-dark.png" alt="Detail" width="600" height="483" loading="lazy"></a>
+      <p>Detail</p>
+    </div>
   </div>
 </section>
 
 </div>
 
 <footer>
-  <div class="footer-links">
-    <a href="https://github.com/eboudrant/papa-stud">GitHub</a>
-    <a href="https://github.com/eboudrant/papa-stud/issues">Issues</a>
-    <a href="https://github.com/eboudrant/papa-stud/releases">Releases</a>
+  <div class="container">
+    <div class="brand-line">
+      <img src="favicon.svg" alt="">
+      Papa Stud<span class="title-io">.io</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/eboudrant/papa-stud">GitHub</a>
+      <a href="https://github.com/eboudrant/papa-stud/issues">Issues</a>
+      <a href="https://github.com/eboudrant/papa-stud/releases">Releases</a>
+    </div>
+    <p class="footer-credit">Demo soundtrack: <a href="https://projindigo.bandcamp.com/track/homage-to-daylight">Homage to Daylight</a> by Proj Indigo.</p>
   </div>
-  <p>Papa Stud.io</p>
-  <p class="footer-credit">Demo soundtrack: <a href="https://projindigo.bandcamp.com/track/homage-to-daylight">Homage to Daylight</a> by Proj Indigo.</p>
 </footer>
 
-<div class="lightbox" id="lightbox">
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot preview">
   <button class="lightbox-close" aria-label="Close">&times;</button>
   <img alt="">
 </div>
@@ -197,17 +702,34 @@ function _copy(btn) {
   });
 }
 
+// Reveal-on-scroll
 const obs = new IntersectionObserver((entries) => {
-  for (const e of entries) { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } }
+  for (const e of entries) {
+    if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+  }
 }, { threshold: 0.1 });
 document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+// Smooth-scroll for in-page anchors
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', (e) => {
-    const t = document.querySelector(a.getAttribute('href'));
+    const href = a.getAttribute('href');
+    if (href === '#' || href.length < 2) return;
+    const t = document.querySelector(href);
     if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth' }); }
   });
 });
 
+// Sticky header: add a backdrop once user scrolls past the very top
+const headerEl = document.getElementById('site-header');
+const onScroll = () => {
+  if (window.scrollY > 8) headerEl.classList.add('scrolled');
+  else headerEl.classList.remove('scrolled');
+};
+window.addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+// Lightbox (preserve original selectors & behavior)
 const lightbox = document.getElementById('lightbox');
 const lightboxImg = lightbox.querySelector('img');
 function _closeLightbox() { lightbox.classList.remove('open'); lightboxImg.src = ''; }
