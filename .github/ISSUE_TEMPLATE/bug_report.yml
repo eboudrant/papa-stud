@@ -7,56 +7,14 @@ body:
     id: what-happened
     attributes:
       label: What happened?
-      description: A clear description of the bug.
-      placeholder: When I scanned a Roborazzi module, the deltas didn't show up...
+      description: A clear description of the bug. Steps to reproduce and any logs are welcome.
     validations:
       required: true
-  - type: textarea
-    id: steps
-    attributes:
-      label: Steps to reproduce
-      description: How can we reproduce this?
-      placeholder: |
-        1. Add a project at /path/to/repo
-        2. Click Scan
-        3. ...
-    validations:
-      required: false
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected behavior
-      placeholder: I expected the failures to be listed under the module.
-    validations:
-      required: false
   - type: input
-    id: tool
+    id: environment
     attributes:
-      label: Screenshot tool
-      description: Paparazzi / Roborazzi / Compose Screenshot Testing / swift-snapshot-testing / custom
-      placeholder: Paparazzi
-    validations:
-      required: false
-  - type: input
-    id: papastud-version
-    attributes:
-      label: Papa Stud version
-      description: See the About menu, or `brew list --cask papastud --versions`
-      placeholder: 1.2.3
-    validations:
-      required: false
-  - type: input
-    id: os
-    attributes:
-      label: macOS version
-      placeholder: macOS 14.5
-    validations:
-      required: false
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs
-      description: Attach `server.log` if relevant (Help → Open Log File).
-      render: shell
+      label: Environment
+      description: Papa Stud version, macOS version, screenshot tool.
+      placeholder: Papa Stud 1.2.3 — macOS 14.5 — Paparazzi
     validations:
       required: false

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const projects = require('../src/projects');
 const { createApp } = require('../src/handler');
 const { migrateDataFiles } = require('../src/dataMigration');
@@ -167,7 +168,7 @@ function buildMenu() {
         {
           label: 'Report a Bug',
           click: () => {
-            require('electron').shell.openExternal('https://github.com/eboudrant/papa-stud/issues/new?template=bug_report.yml');
+            require('electron').shell.openExternal(bugReportUrl());
           },
         },
         { type: 'separator' },
@@ -215,6 +216,22 @@ function themeBgColor(theme) {
 
 ipcMain.handle('get-theme', () => readTheme());
 ipcMain.on('set-theme', (_, value) => writeTheme(value));
+
+function appInfo() {
+  return {
+    version: app.getVersion(),
+    platform: process.platform,
+    osRelease: os.release(),
+  };
+}
+
+function bugReportUrl() {
+  const info = appInfo();
+  const env = `Papa Stud ${info.version} — ${info.platform} ${info.osRelease}`;
+  return `https://github.com/eboudrant/papa-stud/issues/new?template=bug_report.yml&environment=${encodeURIComponent(env)}`;
+}
+
+ipcMain.handle('get-app-info', () => appInfo());
 
 let _dragStart = null;
 ipcMain.on('start-window-drag', (_, x, y) => {

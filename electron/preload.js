@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startWindowDrag: (x, y) => ipcRenderer.send('start-window-drag', x, y),
   windowDragMove: (x, y) => ipcRenderer.send('window-drag-move', x, y),
   stopWindowDrag: () => ipcRenderer.send('stop-window-drag'),
+  getAppInfo: () => ipcRenderer.invoke('get-app-info'),
 });
