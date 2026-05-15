@@ -58,22 +58,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Background atmosphere — a single tight "camera flash" near the very top,
-   plus subtle film grain across the whole page. Paparazzi vibe, not generic dev-tool blob. */
-body::before {
-  content: '';
-  position: fixed;
-  top: -380px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 760px;
-  height: 760px;
-  background:
-    radial-gradient(closest-side, rgba(170,245,200,0.26), rgba(80,180,120,0.10) 28%, transparent 62%);
-  filter: blur(28px);
-  pointer-events: none;
-  z-index: -1;
-}
 /* Film grain overlay — inline SVG turbulence, very low opacity */
 body::after {
   content: '';
