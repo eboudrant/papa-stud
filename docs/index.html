@@ -747,13 +747,19 @@ const obs = new IntersectionObserver((entries) => {
 }, { threshold: 0.1 });
 document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 
-// Smooth-scroll for in-page anchors
+// Smooth-scroll for in-page anchors; auto-play the demo video on #demo
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', (e) => {
     const href = a.getAttribute('href');
     if (href === '#' || href.length < 2) return;
     const t = document.querySelector(href);
-    if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth' }); }
+    if (!t) return;
+    e.preventDefault();
+    t.scrollIntoView({ behavior: 'smooth' });
+    if (href === '#demo') {
+      const v = t.querySelector('video');
+      if (v) v.play().catch(() => {});
+    }
   });
 });
 
