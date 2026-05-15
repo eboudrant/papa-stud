@@ -30,10 +30,10 @@
   --text: #ededee;
   --text-dim: #9a9aa3;
   --text-faint: #62626c;
-  --accent: #4d8eff;
-  --accent-hover: #6ba0ff;
-  --accent-soft: rgba(77, 142, 255, 0.12);
-  --accent-glow: rgba(77, 142, 255, 0.35);
+  --accent: #22c55e;
+  --accent-hover: #4ade80;
+  --accent-soft: rgba(34, 197, 94, 0.12);
+  --accent-glow: rgba(34, 197, 94, 0.35);
   --green: #3fb950;
   --red: #f85149;
   --radius-sm: 6px;
@@ -69,7 +69,7 @@ body::before {
   width: 760px;
   height: 760px;
   background:
-    radial-gradient(closest-side, rgba(180,205,255,0.28), rgba(110,150,230,0.10) 28%, transparent 62%);
+    radial-gradient(closest-side, rgba(170,245,200,0.26), rgba(80,180,120,0.10) 28%, transparent 62%);
   filter: blur(28px);
   pointer-events: none;
   z-index: -1;
@@ -227,10 +227,15 @@ header nav .nav-link { display: none; }
   -webkit-text-fill-color: transparent;
 }
 .hero h1 .accent {
-  background: linear-gradient(180deg, #6ba0ff 0%, #4d8eff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+.hero h1 .accent-red {
+  background-image: linear-gradient(180deg, #ff7a72 0%, #f85149 100%);
+}
+.hero h1 .accent-green {
+  background-image: linear-gradient(180deg, #4ade80 0%, #22c55e 100%);
 }
 .hero-sub {
   font-size: clamp(16px, 2vw, 19px);
@@ -267,14 +272,15 @@ header nav .nav-link { display: none; }
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 6px 24px -8px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.18);
+  color: #062e1a;
+  font-weight: 600;
+  box-shadow: 0 6px 24px -8px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.25);
 }
 .btn-primary:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
-  color: #fff;
-  box-shadow: 0 8px 30px -8px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.22);
+  color: #062e1a;
+  box-shadow: 0 8px 30px -8px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.3);
 }
 
 /* ---------- Demo ---------- */
@@ -636,7 +642,7 @@ footer .footer-links a:hover { color: var(--text); }
     <span class="pill pill-pass">PASS</span>
     &nbsp;Built for Paparazzi, Roborazzi &amp; Compose Screenshot Testing
   </span>
-  <h1 class="reveal">Review screenshot failures, <span class="accent">side-by-side.</span></h1>
+  <h1 class="reveal">Review screenshot failures, <span class="accent accent-red">side</span>-by-<span class="accent accent-green">side.</span></h1>
   <p class="hero-sub reveal">A self-hosted desktop reviewer for Android screenshot tests. Scan your Gradle project, triage diffs in seconds, accept new baselines with one click.</p>
   <div class="hero-actions reveal">
     <a class="btn btn-primary" href="#install">Get started</a>
