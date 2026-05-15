@@ -19,7 +19,7 @@
 <meta name="twitter:image" content="https://eboudrant.github.io/papa-stud/assets/og-poster.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #0a0a0c;
@@ -58,22 +58,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Background atmosphere — a single tight "camera flash" near the very top,
-   plus subtle film grain across the whole page. Paparazzi vibe, not generic dev-tool blob. */
-body::before {
-  content: '';
-  position: fixed;
-  top: -380px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 760px;
-  height: 760px;
-  background:
-    radial-gradient(closest-side, rgba(170,245,200,0.26), rgba(80,180,120,0.10) 28%, transparent 62%);
-  filter: blur(28px);
-  pointer-events: none;
-  z-index: -1;
-}
 /* Film grain overlay — inline SVG turbulence, very low opacity */
 body::after {
   content: '';
@@ -89,6 +73,33 @@ body::after {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
 
+a.tool-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease;
+}
+a.tool-link:hover {
+  color: inherit;
+  text-decoration-color: var(--text-dim);
+}
+.beta-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.14);
+  color: #f6b75a;
+  vertical-align: 1px;
+  margin-left: 2px;
+  font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -101,7 +112,7 @@ pre {
   border-radius: var(--radius);
   padding: 18px 20px;
   overflow-x: auto;
-  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.7;
   color: #c9c9d1;
@@ -111,6 +122,7 @@ pre {
 
 section { padding: 88px 0; }
 section + section { padding-top: 0; }
+section[id] { scroll-margin-top: 72px; }
 
 h1, h2, h3 { font-family: inherit; letter-spacing: -0.015em; }
 
@@ -198,18 +210,12 @@ header nav .nav-link { display: none; }
 
 /* ---------- Hero ---------- */
 .hero {
-  padding: 112px 0 96px;
+  padding: 72px 0 56px;
   text-align: center;
   position: relative;
 }
 .hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 14px 4px 5px;
-  border: 1px solid var(--border-strong);
-  background: rgba(255,255,255,0.02);
-  border-radius: 999px;
+  display: inline-block;
   font-size: 12px;
   color: var(--text-dim);
   margin-bottom: 28px;
@@ -242,7 +248,7 @@ header nav .nav-link { display: none; }
   line-height: 1.55;
   color: var(--text-dim);
   max-width: 620px;
-  margin: 0 auto 36px;
+  margin: 0 auto 28px;
 }
 .hero-actions {
   display: flex;
@@ -531,34 +537,6 @@ footer .footer-links a:hover { color: var(--text); }
   html { scroll-behavior: auto; }
 }
 
-/* ---------- PASS / FAIL pills (app's visual signature) ---------- */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 2px 7px;
-  border-radius: 999px;
-  line-height: 1.4;
-  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
-}
-.pill-fail {
-  background: rgba(248, 81, 73, 0.14);
-  color: #ff7b73;
-  box-shadow: inset 0 0 0 1px rgba(248, 81, 73, 0.3);
-}
-.pill-pass {
-  background: rgba(63, 185, 80, 0.14);
-  color: #5dd56e;
-  box-shadow: inset 0 0 0 1px rgba(63, 185, 80, 0.3);
-}
-.hero-badge .pill-arrow {
-  color: var(--text-faint);
-  font-size: 11px;
-  margin: 0 1px;
-}
-
 /* ---------- Viewfinder corner brackets on screenshot cards ---------- */
 .screenshot a::before,
 .screenshot a::after {
@@ -598,7 +576,7 @@ footer .footer-links a:hover { color: var(--text); }
   position: absolute;
   top: 12px;
   left: 20px;
-  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -622,6 +600,7 @@ footer .footer-links a:hover { color: var(--text); }
       <span>Papa Stud<span class="title-io">.io</span></span>
     </a>
     <nav>
+      <a class="nav-link" href="#demo">See it in action</a>
       <a class="nav-link" href="#features">Features</a>
       <a class="nav-link" href="#install">Get started</a>
       <a class="nav-link" href="#screenshots">Screenshots</a>
@@ -636,14 +615,11 @@ footer .footer-links a:hover { color: var(--text); }
 <div class="container">
 
 <section class="hero">
-  <span class="hero-badge reveal">
-    <span class="pill pill-fail">FAIL</span>
-    <span class="pill-arrow" aria-hidden="true">&rarr;</span>
-    <span class="pill pill-pass">PASS</span>
-    &nbsp;Built for Paparazzi, Roborazzi &amp; Compose Screenshot Testing
-  </span>
   <h1 class="reveal">Review screenshot failures, <span class="accent accent-red">side</span>-by-<span class="accent accent-green">side.</span></h1>
-  <p class="hero-sub reveal">A self-hosted desktop reviewer for Android screenshot tests. Scan your Gradle project, triage diffs in seconds, accept new baselines with one click.</p>
+  <p class="hero-sub reveal">A desktop app for reviewing Android screenshot tests. Scan your Gradle project, triage diffs in seconds, accept new baselines with one click.</p>
+  <span class="hero-badge reveal">
+    Built for <a class="tool-link" href="https://github.com/cashapp/paparazzi" target="_blank" rel="noopener">Paparazzi</a>, <a class="tool-link" href="https://github.com/takahirom/roborazzi" target="_blank" rel="noopener">Roborazzi</a>, <a class="tool-link" href="https://developer.android.com/studio/preview/compose-screenshot-testing" target="_blank" rel="noopener">Compose Screenshot Testing</a> &middot; <a class="tool-link" href="https://github.com/pointfreeco/swift-snapshot-testing" target="_blank" rel="noopener">swift-snapshot-testing</a> <span class="beta-tag">beta</span>
+  </span>
   <div class="hero-actions reveal">
     <a class="btn btn-primary" href="#install">Get started</a>
     <a class="btn" href="https://github.com/eboudrant/papa-stud" target="_blank" rel="noopener">
@@ -668,14 +644,14 @@ footer .footer-links a:hover { color: var(--text); }
 <section id="features">
   <span class="section-eyebrow reveal">Features</span>
   <h2 class="section-title reveal">Everything you need to triage diffs</h2>
-  <p class="section-sub reveal">A focused toolkit, not a platform. Local-first, fast, and built around how Android engineers actually work.</p>
+  <p class="section-sub reveal">A focused toolkit, not a platform. Local-first, fast, and built around how mobile engineers actually work.</p>
   <div class="features-grid">
     <div class="feature-card reveal">
       <div class="feature-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
       </div>
-      <h3>Three test frameworks</h3>
-      <p>Works out of the box with Paparazzi, Roborazzi, and Compose Screenshot Testing.</p>
+      <h3>Android &amp; iOS tools</h3>
+      <p>Works out of the box with <a class="tool-link" href="https://github.com/cashapp/paparazzi" target="_blank" rel="noopener">Paparazzi</a>, <a class="tool-link" href="https://github.com/takahirom/roborazzi" target="_blank" rel="noopener">Roborazzi</a>, and <a class="tool-link" href="https://developer.android.com/studio/preview/compose-screenshot-testing" target="_blank" rel="noopener">Compose Screenshot Testing</a>. iOS via <a class="tool-link" href="https://github.com/pointfreeco/swift-snapshot-testing" target="_blank" rel="noopener">swift-snapshot-testing</a> in beta.</p>
     </div>
     <div class="feature-card reveal">
       <div class="feature-icon">
@@ -785,13 +761,19 @@ const obs = new IntersectionObserver((entries) => {
 }, { threshold: 0.1 });
 document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 
-// Smooth-scroll for in-page anchors
+// Smooth-scroll for in-page anchors; auto-play the demo video on #demo
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', (e) => {
     const href = a.getAttribute('href');
     if (href === '#' || href.length < 2) return;
     const t = document.querySelector(href);
-    if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth' }); }
+    if (!t) return;
+    e.preventDefault();
+    t.scrollIntoView({ behavior: 'smooth' });
+    if (href === '#demo') {
+      const v = t.querySelector('video');
+      if (v) v.play().catch(() => {});
+    }
   });
 });
 
