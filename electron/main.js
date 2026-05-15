@@ -75,6 +75,15 @@ function createWindow() {
   mainWindow.loadURL(`http://127.0.0.1:${port}/?electron=1`);
   mainWindow.on('closed', () => { mainWindow = null; });
 
+  // External links (target="_blank") open in the user's default browser.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) {
+      require('electron').shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
   // Handle file downloads — save to Downloads folder
   mainWindow.webContents.session.on('will-download', (event, item) => {
     const downloadsPath = app.getPath('downloads');
@@ -155,6 +164,13 @@ function buildMenu() {
     {
       label: 'Help',
       submenu: [
+        {
+          label: 'Report a Bug',
+          click: () => {
+            require('electron').shell.openExternal('https://github.com/eboudrant/papa-stud/issues/new?template=bug_report.yml');
+          },
+        },
+        { type: 'separator' },
         {
           label: 'Open Log File',
           click: () => {
