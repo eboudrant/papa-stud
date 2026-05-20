@@ -75,7 +75,7 @@ describe('detectCurrentFailures', () => {
     fs.utimesSync(stale, new Date(1000000000), new Date(1000000000));
 
     const result = detectCurrentFailures(tmpdir);
-    const names = new Set(result.map(f => path.basename(f)));
+    const names = new Set(result.map(c => path.basename(c.path)));
     assert.deepEqual(names, new Set(['delta-current1.png', 'delta-current2.png']));
   });
 
@@ -88,7 +88,27 @@ describe('detectCurrentFailures', () => {
     makePng(path.join(tmpdir, 'delta-real.png'));
     const result = detectCurrentFailures(tmpdir);
     assert.equal(result.length, 1);
-    assert.ok(path.basename(result[0]) === 'delta-real.png');
+    assert.ok(path.basename(result[0].path) === 'delta-real.png');
+  });
+
+  it('recurses into androidMain subdir, drops legacy stale top-level deltas', () => {
+    // Legacy layout: stale deltas at the root of failures/
+    const legacy1 = path.join(tmpdir, 'delta-stale1.png');
+    const legacy2 = path.join(tmpdir, 'delta-stale2.png');
+    makePng(legacy1);
+    makePng(legacy2);
+    fs.utimesSync(legacy1, new Date(1000000000), new Date(1000000000));
+    fs.utimesSync(legacy2, new Date(1000000000), new Date(1000000000));
+
+    // AGP 9 layout: current deltas under failures/androidMain/
+    const agp9 = path.join(tmpdir, 'androidMain');
+    fs.mkdirSync(agp9, { recursive: true });
+    makePng(path.join(agp9, 'delta-current1.png'));
+    makePng(path.join(agp9, 'delta-current2.png'));
+
+    const result = detectCurrentFailures(tmpdir);
+    const names = new Set(result.map(c => path.basename(c.path)));
+    assert.deepEqual(names, new Set(['delta-current1.png', 'delta-current2.png']));
   });
 });
 
@@ -176,6 +196,35 @@ describe('scanProject', () => {
     // Only the fresh delta should be included, not the stale one
     assert.equal(result.failures.length, 1);
     assert.equal(result.failures[0].filename, 'com.example_NewTest_newMethod.png');
+  });
+
+  it('AGP 9 layout: delta + actual + golden all resolve correctly', () => {
+    const root = tmpdir;
+    const failures = path.join(root, 'app', 'build', 'paparazzi', 'failures');
+    const failuresAgp9 = path.join(failures, 'androidMain');
+    const goldenAgp9 = path.join(root, 'app', 'src', 'androidHostTest', 'snapshots', 'images');
+    fs.mkdirSync(failuresAgp9, { recursive: true });
+    fs.mkdirSync(goldenAgp9, { recursive: true });
+
+    // Stale legacy delta at the top of failures/ — should be filtered out
+    const staleLegacy = path.join(failures, 'delta-com.example_OldTest_oldMethod.png');
+    makePng(staleLegacy);
+    fs.utimesSync(staleLegacy, new Date(1000000000), new Date(1000000000));
+
+    // Fresh AGP 9 layout: delta + actual under failures/androidMain/, golden under androidHostTest
+    makePng(path.join(failuresAgp9, 'delta-com.example_NewTest_newMethod.png'));
+    makePng(path.join(failuresAgp9, 'com.example_NewTest_newMethod.png'));
+    makePng(path.join(goldenAgp9, 'com.example_NewTest_newMethod.png'));
+    fs.utimesSync(path.join(goldenAgp9, 'com.example_NewTest_newMethod.png'), new Date(1000000000), new Date(1000000000));
+
+    const result = scanProject(root);
+    assert.equal(result.failures.length, 1);
+    const f = result.failures[0];
+    assert.equal(f.filename, 'com.example_NewTest_newMethod.png');
+    assert.equal(f.has_golden, true, 'AGP 9 golden should resolve');
+    assert.equal(f.has_actual, true, 'actual should be found next to the delta in androidMain/');
+    assert.ok(f.golden_path.includes('androidHostTest'), 'golden should come from the androidHostTest path');
+    assert.ok(f.actual_path.includes('androidMain'), 'actual should sit alongside the delta');
   });
 
   it('snapshot count included', () => {
@@ -497,7 +546,7 @@ describe('detectCurrentFailures edge cases', () => {
 
     const result = detectCurrentFailures(tmpdir, '', '_compare');
     assert.equal(result.length, 1);
-    assert.ok(result[0].includes('test_compare.png'));
+    assert.ok(result[0].path.includes('test_compare.png'));
   });
 
   it('no delta convention recurses subdirs', () => {
@@ -534,7 +583,7 @@ describe('detectCurrentFailures edge cases', () => {
 
     const result = detectCurrentFailures(tmpdir);
     assert.equal(result.length, 1);
-    assert.ok(result[0].includes('delta-new.png'));
+    assert.ok(result[0].path.includes('delta-new.png'));
   });
 });
 

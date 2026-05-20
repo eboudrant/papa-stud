@@ -249,20 +249,21 @@ function processProfile(
   } else if (xmlMtime > 0 && current.length) {
     // Filter out delta files older than the latest JUnit XML run
     const before = current.length;
-    current = current.filter(f => fs.statSync(f).mtimeMs / 1000 > xmlMtime - MTIME_CLUSTER_TOLERANCE);
+    current = current.filter(c => c.mtime > xmlMtime - MTIME_CLUSTER_TOLERANCE);
     if (current.length < before) log(`[scan] filtered ${before - current.length} stale deltas (older than xmlMtime ${xmlMtime})`);
   }
 
   const goldenCache = new Map();
-  for (const f of current) {
-    const base = deltaToBase(path.basename(f), deltaPrefix, deltaSuffix);
+  for (const c of current) {
+    const base = deltaToBase(path.basename(c.path), deltaPrefix, deltaSuffix);
     // Key by full path so subdirs with same basename don't collide in compare mode
-    goldenCache.set(f, resolveGolden(modulePath, goldenPatterns, base));
+    goldenCache.set(c.path, resolveGolden(modulePath, goldenPatterns, base));
   }
 
   const noDeltaConvention = !deltaPrefix && !deltaSuffix;
 
-  for (const candidatePath of current) {
+  for (const c of current) {
+    const candidatePath = c.path;
     const base = deltaToBase(path.basename(candidatePath), deltaPrefix, deltaSuffix);
     const parsed = parseFilename(base);
     const goldenPath = goldenCache.get(candidatePath);
@@ -285,7 +286,9 @@ function processProfile(
         } catch {}
       }
     } else {
-      // Delta mode: separate delta file, actual may have a suffix
+      // Delta mode: separate delta file, actual may have a suffix.
+      // Look for the actual alongside the delta — AGP 9 / KMP puts both in
+      // `failures/androidMain/`, legacy puts both at the root of `failures/`.
       deltaFilePath = candidatePath;
       let actualName;
       if (actualSuffix) {
@@ -294,12 +297,11 @@ function processProfile(
       } else {
         actualName = base;
       }
-      actualPath = path.join(failuresDir, actualName);
+      actualPath = path.join(path.dirname(candidatePath), actualName);
       try { if (!fs.statSync(actualPath).isFile()) actualPath = null; }
       catch { actualPath = null; }
     }
 
-    const stat = fs.statSync(candidatePath);
     results.push({
       module: moduleName,
       profile: profileName,
@@ -315,7 +317,7 @@ function processProfile(
       diff_pct: (diffPcts || {})[base] || null,
       has_golden: goldenPath !== null,
       has_actual: actualPath !== null,
-      mtime: stat.mtimeMs / 1000,
+      mtime: c.mtime,
     });
   }
   return results;
@@ -340,6 +342,10 @@ function detectCurrentFailures(failuresDir, deltaPrefix = 'delta-', deltaSuffix 
   const deltaFiles = [];
   const noDeltaConvention = !deltaPrefix && !deltaSuffix;
 
+  // Recurse into subdirs always: Paparazzi on AGP 9 / KMP writes failures under
+  // `failures/androidMain/`, while the legacy layout puts them at the top of
+  // `failures/`. A project can hold both side by side; mtime clustering then
+  // picks the newest run.
   function scanDir(dir) {
     let entries;
     try {
@@ -348,8 +354,8 @@ function detectCurrentFailures(failuresDir, deltaPrefix = 'delta-', deltaSuffix 
       return;
     }
     for (const entry of entries) {
-      if (entry.isDirectory() && noDeltaConvention) {
-        scanDir(path.join(dir, entry.name)); // recurse for nested packages
+      if (entry.isDirectory()) {
+        scanDir(path.join(dir, entry.name));
         continue;
       }
       if (!entry.isFile() || !entry.name.endsWith('.png')) continue;
@@ -375,7 +381,7 @@ function detectCurrentFailures(failuresDir, deltaPrefix = 'delta-', deltaSuffix 
   const current = [];
   for (const [f, mtime] of deltaFiles) {
     if (latestMtime - mtime <= MTIME_CLUSTER_TOLERANCE) {
-      current.push(f);
+      current.push({ path: f, mtime });
     } else {
       break;
     }
