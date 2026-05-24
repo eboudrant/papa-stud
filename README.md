@@ -16,13 +16,13 @@ https://github.com/user-attachments/assets/c8d35b14-fd80-4e6e-989f-63c041bea9a7
 
 ```
 brew tap eboudrant/tap
-brew install --cask papastud
+brew install --cask papastudio
 ```
 
 ## Update
 
 ```
-brew update && brew upgrade --cask papastud
+brew update && brew upgrade --cask papastudio
 ```
 
 ## Run from source
@@ -54,11 +54,11 @@ npm run electron # desktop app
 npm test
 
 # Screenshot tests (Docker)
-docker build -f Dockerfile.test -t papastud-test .
-docker run --rm -e CI=true papastud-test npx playwright test
+docker build -f Dockerfile.test -t papastudio-test .
+docker run --rm -e CI=true papastudio-test npx playwright test
 
 # Update baselines
-docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots
+docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastudio-test npx playwright test --update-snapshots
 ```
 
 ## Project structure

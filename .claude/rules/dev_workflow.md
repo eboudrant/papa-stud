@@ -80,14 +80,14 @@ Single-user local tool. Server binds `127.0.0.1` in Electron; there is no remote
 Any change to `static/` (HTML, CSS, JS) likely shifts pixels and breaks the baselines. **Before `git push`**, run the Docker screenshot tests locally — the same image CI uses, so a local pass means CI will pass:
 
 ```
-docker build -f Dockerfile.test -t papastud-test .
-docker run --rm -e CI=true papastud-test npx playwright test
+docker build -f Dockerfile.test -t papastudio-test .
+docker run --rm -e CI=true papastudio-test npx playwright test
 ```
 
 If they fail intentionally (the diff is the new desired baseline), regenerate and commit:
 
 ```
-docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots
+docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastudio-test npx playwright test --update-snapshots
 git add tests/screenshots && git commit -m "chore: refresh screenshot baselines"
 ```
 

@@ -1,5 +1,6 @@
 {
-  "name": "papastud",
+  "name": "papastudio",
+  "productName": "Papa Stud.io",
   "version": "1.0.0",
   "description": "Screenshot failure reviewer for Android testing tools",
   "private": true,
@@ -10,9 +11,9 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "test": "node --test tests/node/*.test.js",
-    "test:screenshots": "docker run --rm -e CI=true papastud-test npx playwright test",
-    "test:screenshots:update": "docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots",
-    "test:screenshots:build": "docker build -f Dockerfile.test -t papastud-test ."
+    "test:screenshots": "docker run --rm -e CI=true papastudio-test npx playwright test",
+    "test:screenshots:update": "docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastudio-test npx playwright test --update-snapshots",
+    "test:screenshots:build": "docker build -f Dockerfile.test -t papastudio-test ."
   },
   "dependencies": {
     "express": "^5.0.0",

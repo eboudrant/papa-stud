@@ -61,7 +61,7 @@ jobs:
           context: .
           file: Dockerfile.test
           load: true
-          tags: papastud-test
+          tags: papastudio-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -71,7 +71,7 @@ jobs:
             -e CI=true \
             -v ${{ github.workspace }}/test-results:/app/test-results \
             -v ${{ github.workspace }}/playwright-report:/app/playwright-report \
-            papastud-test \
+            papastudio-test \
             npx playwright test --reporter=list,html
 
       - name: Upload test results on failure

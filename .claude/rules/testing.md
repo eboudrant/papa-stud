@@ -13,9 +13,9 @@ Tests live in `tests/node/*.test.js`, run with Node's built-in test runner (`nod
 Playwright in Docker for consistent rendering. Desktop only (1280x800), zero-tolerance pixel diff.
 
 ```
-docker build -f Dockerfile.test -t papastud-test .
-docker run --rm -e CI=true papastud-test npx playwright test
-docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastud-test npx playwright test --update-snapshots
+docker build -f Dockerfile.test -t papastudio-test .
+docker run --rm -e CI=true papastudio-test npx playwright test
+docker run --rm -v ./tests/screenshots:/app/tests/screenshots papastudio-test npx playwright test --update-snapshots
 ```
 
 - Baselines: `tests/screenshots/*.png` (flat, no subdirectories).

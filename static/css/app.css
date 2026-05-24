@@ -86,7 +86,7 @@ header {
 .electron header h1 { font-size: 13px; }
 header a { text-decoration: none; color: inherit; }
 header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
-.title-io { font-weight: 300; color: var(--text-light); }
+.title-io { font-weight: 300; }
 .nav-bar { display: flex; align-items: center; gap: 4px; margin-left: 4px; flex: 1; min-width: 0; }
 .nav-back { display: inline-flex; align-items: center; color: var(--text-dim); text-decoration: none; padding: 2px 6px; border-radius: 4px; transition: background 0.15s, color 0.15s; flex-shrink: 0; background: none; border: none; cursor: pointer; font: inherit; }
 .nav-back:hover { background: var(--accent-light); color: var(--accent); }

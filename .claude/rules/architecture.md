@@ -15,7 +15,7 @@ npm start                      # http://localhost:8770 (dev only)
 
 ## No Docker for the app
 
-Papa Stud does **not** ship as a Docker image. Electron is the delivery mechanism; `npm start` is for local dev. Don't reintroduce a `Dockerfile` / `docker-compose.yml` for running the server — file paths the user wants to scan live on the host, mounting them into a container is friction without value, and Electron already handles single-user-local distribution.
+Papa Stud.io does **not** ship as a Docker image. Electron is the delivery mechanism; `npm start` is for local dev. Don't reintroduce a `Dockerfile` / `docker-compose.yml` for running the server — file paths the user wants to scan live on the host, mounting them into a container is friction without value, and Electron already handles single-user-local distribution.
 
 `Dockerfile.test` is the **one** Docker file we keep — it's load-bearing for pixel-consistent Playwright screenshot baselines (rendering drifts across host environments otherwise). See `.claude/rules/testing.md`.
 
