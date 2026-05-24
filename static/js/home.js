@@ -69,7 +69,7 @@ async function _loadHome() {
   _checkForUpdateOnce();
 }
 
-const UPDATE_CMD = 'brew upgrade --cask papastud';
+const UPDATE_CMD = 'brew upgrade --cask papastudio';
 const UPDATE_DISMISSED_KEY = 'papastud_update_dismissed';
 let _updateChecked = false;
 

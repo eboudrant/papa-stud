@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a new Papa Stud release by triggering the GitHub release workflow with the next semver-bumped version. Default bump is patch; pass "minor" or "major" to override.
+description: Cut a new Papa Stud.io release by triggering the GitHub release workflow with the next semver-bumped version. Default bump is patch; pass "minor" or "major" to override.
 argument-hint: [patch|minor|major]
 disable-model-invocation: true
 user-invocable: true

@@ -6,6 +6,22 @@ const projects = require('../src/projects');
 const { createApp } = require('../src/handler');
 const { migrateDataFiles } = require('../src/dataMigration');
 
+function resolveUserDataDir() {
+  const appData = app.getPath('appData');
+  const legacyDir = path.join(appData, 'papastud');
+  const newDir = path.join(appData, 'PapaStudio');
+  if (!fs.existsSync(legacyDir) || fs.existsSync(newDir)) return newDir;
+  try {
+    fs.renameSync(legacyDir, newDir);
+    return newDir;
+  } catch (e) {
+    console.error('userData migration failed:', e);
+    return legacyDir;
+  }
+}
+
+app.setPath('userData', resolveUserDataDir());
+
 let mainWindow;
 let server;
 let port;
@@ -227,7 +243,7 @@ function appInfo() {
 
 function bugReportUrl() {
   const info = appInfo();
-  const env = `Papa Stud ${info.version} — ${info.platform} ${info.osRelease}`;
+  const env = `Papa Stud.io ${info.version} — ${info.platform} ${info.osRelease}`;
   return `https://github.com/eboudrant/papa-stud/issues/new?template=bug_report.yml&environment=${encodeURIComponent(env)}`;
 }
 
