@@ -39,7 +39,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: papastud-${{ matrix.arch }}
+          name: papastudio-${{ matrix.arch }}
           path: |
             out/make/**/*.zip
             out/make/**/*.dmg
@@ -55,13 +55,13 @@ jobs:
       - name: Download arm64 artifacts
         uses: actions/download-artifact@v8
         with:
-          name: papastud-arm64
+          name: papastudio-arm64
           path: artifacts/arm64
 
       - name: Download x64 artifacts
         uses: actions/download-artifact@v8
         with:
-          name: papastud-x64
+          name: papastudio-x64
           path: artifacts/x64
 
       - name: Collect release files
@@ -97,13 +97,13 @@ jobs:
       - name: Download arm64 artifacts
         uses: actions/download-artifact@v8
         with:
-          name: papastud-arm64
+          name: papastudio-arm64
           path: artifacts/arm64
 
       - name: Download x64 artifacts
         uses: actions/download-artifact@v8
         with:
-          name: papastud-x64
+          name: papastudio-x64
           path: artifacts/x64
 
       - name: Compute SHA256

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Papa Stud</title>
+  <title>Papa Stud.io</title>
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
@@ -54,7 +54,7 @@
         window.electronAPI.getAppInfo().then(info => {
           const link = document.getElementById('bug-report-link');
           if (!link || !info) return;
-          const env = `Papa Stud ${info.version} — ${info.platform} ${info.osRelease}`;
+          const env = `Papa Stud.io ${info.version} — ${info.platform} ${info.osRelease}`;
           link.href = `https://github.com/eboudrant/papa-stud/issues/new?template=bug_report.yml&environment=${encodeURIComponent(env)}`;
         }).catch(() => {});
       }

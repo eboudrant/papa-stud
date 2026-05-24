@@ -4,7 +4,7 @@ const { mockApi } = require('./fixtures');
 
 test('home page renders with empty state', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('h1')).toContainText('Papa Stud');
+  await expect(page.locator('h1')).toContainText('Papa Stud.io');
   await expect(page.locator('button:has-text("Add Project")').first()).toBeVisible();
   await expect(page.locator('text=No projects configured')).toBeVisible({ timeout: 10000 });
   await expect(page).toHaveScreenshot('home-empty.png');

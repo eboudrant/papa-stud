@@ -1,5 +1,5 @@
 /**
- * Papa Stud — Screenshot Failure Reviewer
+ * Papa Stud.io — Screenshot Failure Reviewer
  * Node.js entry point. Run with: node src/server.js
  */
 
@@ -13,7 +13,7 @@ migrateDataFiles(dataDir);
 const port = parseInt(process.env.PORT || '8770', 10);
 
 createApp().listen(port, '0.0.0.0', () => {
-  console.log('\n  Papa Stud is running!');
+  console.log('\n  Papa Stud.io is running!');
   console.log(`    ->  http://localhost:${port}`);
   console.log('    Press Ctrl+C to stop\n');
 });

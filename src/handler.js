@@ -161,7 +161,7 @@ function createRouter() {
   router.get('/api/config/export', (req, res) => {
     const allProjects = projects.listProjects();
     const customTemplates = templates.listTemplates().filter(t => !t.builtin);
-    sendExportBundle(res, 'papastud-config.json', config.createExportBundle(allProjects, customTemplates));
+    sendExportBundle(res, 'papastudio-config.json', config.createExportBundle(allProjects, customTemplates));
   });
 
   router.post('/api/config/import', (req, res) => {
@@ -186,13 +186,13 @@ function createRouter() {
   router.get('/api/config/export/project/:id', (req, res) => {
     const project = projects.getProject(req.params.id);
     if (!project) return res.status(404).json({ error: 'project not found' });
-    sendExportBundle(res, `papastud-project-${project.name}.json`, config.createExportBundle([project], []));
+    sendExportBundle(res, `papastudio-project-${project.name}.json`, config.createExportBundle([project], []));
   });
 
   router.get('/api/config/export/template/:id', (req, res) => {
     const t = templates.getTemplate(req.params.id);
     if (!t || t.builtin) return res.status(404).json({ error: 'custom template not found' });
-    sendExportBundle(res, `papastud-template-${t.name}.json`, config.createExportBundle([], [t]));
+    sendExportBundle(res, `papastudio-template-${t.name}.json`, config.createExportBundle([], [t]));
   });
 
   router.post('/api/config/import/project', (req, res) => {
