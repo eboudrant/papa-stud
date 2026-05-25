@@ -25,8 +25,9 @@ module.exports = {
   // touch CFBundleName — Electron derives the Helper bundle paths from it
   // (e.g. `${CFBundleName} Helper (Renderer).app`), so a rename here would
   // make the runtime fail with "Unable to find helper app" → SIGTRAP.
-  // The plist edit invalidates the bundle's ad-hoc signature; re-sign the
-  // outer .app only (Helper / Framework signatures remain intact).
+  // The plist edit invalidates the bundle's ad-hoc signature; re-sign with
+  // --deep so cross-arch builds (where electron-packager leaves nested
+  // Squirrel.framework unsigned) get a complete signature chain.
   hooks: {
     postPackage: async (_forgeConfig, options) => {
       if (options.platform !== 'darwin') return;
@@ -34,7 +35,7 @@ module.exports = {
         const appPath = path.join(outPath, 'PapaStudio.app');
         const plist = path.join(appPath, 'Contents', 'Info.plist');
         execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Set :CFBundleDisplayName Papa Studio', plist]);
-        execFileSync('codesign', ['--force', '--sign', '-', appPath]);
+        execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath]);
       }
     },
   },
