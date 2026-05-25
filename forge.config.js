@@ -20,17 +20,21 @@ module.exports = {
       /\.gitignore/,
     ],
   },
-  // electron-packager's `extendInfo` is ignored for CFBundleName /
-  // CFBundleDisplayName because `name` wins for those specific keys; patch
-  // the plist directly after packaging so macOS dock + Finder show
-  // "Papa Studio" instead of the filesystem-friendly "PapaStudio".
+  // Override CFBundleDisplayName so macOS dock + Finder show "Papa Studio"
+  // (with space) instead of the filesystem-friendly "PapaStudio". Don't
+  // touch CFBundleName — Electron derives the Helper bundle paths from it
+  // (e.g. `${CFBundleName} Helper (Renderer).app`), so a rename here would
+  // make the runtime fail with "Unable to find helper app" → SIGTRAP.
+  // The plist edit invalidates the bundle's ad-hoc signature; re-sign the
+  // outer .app only (Helper / Framework signatures remain intact).
   hooks: {
     postPackage: async (_forgeConfig, options) => {
       if (options.platform !== 'darwin') return;
       for (const outPath of options.outputPaths) {
-        const plist = path.join(outPath, 'PapaStudio.app', 'Contents', 'Info.plist');
-        execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Set :CFBundleName Papa Studio', plist]);
+        const appPath = path.join(outPath, 'PapaStudio.app');
+        const plist = path.join(appPath, 'Contents', 'Info.plist');
         execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Set :CFBundleDisplayName Papa Studio', plist]);
+        execFileSync('codesign', ['--force', '--sign', '-', appPath]);
       }
     },
   },
