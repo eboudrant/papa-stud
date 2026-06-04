@@ -106,12 +106,35 @@ function checkCompat(members, projectRoot) {
   return { modules, matched, unmatched, compatible: matched.length > 0 };
 }
 
-// Extract only the given members into projectRoot. Uses `tar -T <listfile>`
-// so the (potentially large) member list never hits the shell arg limit.
+// The `<moduleRoot>/build` directory a member lives under, e.g.
+// `libraries/x/build/paparazzi/failures/d.png` -> `libraries/x/build`.
+function buildDirOf(member) {
+  const root = moduleRootOf(member);
+  return root ? `${root}/build` : 'build';
+}
+
+// Distinct `build` directories covering the given members.
+function buildDirsOf(members) {
+  const dirs = new Set();
+  for (const m of members) dirs.add(buildDirOf(m));
+  return [...dirs].sort();
+}
+
+// Extract the build outputs for the given members into projectRoot.
+//
+// We extract whole `<module>/build` *directories* rather than individual files:
+// Paparazzi parameterized snapshot names contain `[...]` brackets, which bsdtar
+// interprets as glob character-classes when matching members — so a per-file
+// `-T` list silently matches nothing ("Not found in archive"). Module/build
+// directory paths have no glob metacharacters, so they match literally and tar
+// recreates the subtree recursively. `src/` (and anything outside a build dir)
+// is never named, so goldens/source are never touched. The directory list goes
+// through `-T <listfile>` so a monorepo with many modules can't hit the arg limit.
 function extractBuildMembers(tarFile, members, projectRoot) {
   if (!members.length) return 0;
-  const listFile = path.join(path.dirname(tarFile), `members-${crypto.randomBytes(4).toString('hex')}.txt`);
-  fs.writeFileSync(listFile, members.join('\n') + '\n');
+  const dirs = buildDirsOf(members);
+  const listFile = path.join(path.dirname(tarFile), `builddirs-${crypto.randomBytes(4).toString('hex')}.txt`);
+  fs.writeFileSync(listFile, dirs.join('\n') + '\n');
   try {
     const r = spawnSync('tar', ['-xf', tarFile, '-C', projectRoot, '-T', listFile], {
       encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
@@ -122,7 +145,7 @@ function extractBuildMembers(tarFile, members, projectRoot) {
   } finally {
     try { fs.unlinkSync(listFile); } catch {}
   }
-  return members.length;
+  return dirs.length;
 }
 
 // Remove a downloaded tarball and its temp dir.
@@ -141,4 +164,6 @@ module.exports = {
   isUnsafeMember,
   isBuildMember,
   moduleRootOf,
+  buildDirOf,
+  buildDirsOf,
 };

@@ -95,6 +95,36 @@ describe('remoteFetch pure helpers', () => {
     fs.rmSync(path.dirname(tar), { recursive: true, force: true });
     fs.rmSync(dest, { recursive: true, force: true });
   });
+
+  it('extracts Paparazzi filenames containing [bracket] glob chars', () => {
+    // bsdtar glob-interprets `-T` member entries, so a per-file list silently
+    // fails on bracketed parameterized snapshot names. We extract whole build
+    // dirs instead — this guards that regression.
+    const bracketName = 'delta-com.x_Test_popoverTest[FontScale1x,Basic,NoHeadline,hasFooter].png';
+    const tar = makeTar({
+      [`mod/build/paparazzi/failures/${bracketName}`]: 'delta',
+      'mod/src/test/snapshots/g.png': 'golden',
+    });
+    const members = remoteFetch.listBuildMembers(tar);
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-bracket-'));
+    remoteFetch.extractBuildMembers(tar, members, dest);
+    assert.ok(fs.existsSync(path.join(dest, 'mod/build/paparazzi/failures', bracketName)));
+    assert.ok(!fs.existsSync(path.join(dest, 'mod/src/test/snapshots/g.png')));
+    fs.rmSync(path.dirname(tar), { recursive: true, force: true });
+    fs.rmSync(dest, { recursive: true, force: true });
+  });
+
+  it('buildDirsOf dedups to <module>/build directories', () => {
+    assert.deepEqual(
+      remoteFetch.buildDirsOf([
+        'libraries/x/build/paparazzi/failures/a.png',
+        'libraries/x/build/test-results/v/TEST-A.xml',
+        'app/build/outputs/roborazzi/b.png',
+      ]),
+      ['app/build', 'libraries/x/build']
+    );
+    assert.deepEqual(remoteFetch.buildDirsOf(['build/x.png']), ['build']);
+  });
 });
 
 describe('POST /api/projects/:id/scan-from-url', () => {
