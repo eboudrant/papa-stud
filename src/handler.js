@@ -14,6 +14,7 @@ const config = require('./config');
 const updateCheck = require('./updateCheck');
 const apng = require('./apng');
 const imageSlice = require('./imageSlice');
+const remoteFetch = require('./remoteFetch');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
 const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
@@ -253,6 +254,37 @@ function createRouter() {
     if (!project) return res.status(404).json({ error: 'project not found' });
     const jobId = scanJobs.startScan(project);
     res.status(202).json({ jobId });
+  });
+
+  // Download a CI result tarball from a URL and overlay its build/ artifacts
+  // onto an existing project, then scan. Returns a job the client polls like a
+  // normal scan; the job may park at `needs_confirmation` (see /confirm below).
+  //
+  // codeql[js/request-forgery]: by design — single-user local app, server binds
+  // 127.0.0.1 (Electron only; no remote attacker). The URL is the user's own
+  // CI artifact link; fetching it is the whole point of the feature. See the
+  // threat model in `.claude/rules/dev_workflow.md`.
+  router.post('/api/projects/:id/scan-from-url', (req, res) => {
+    const project = projects.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: 'project not found' });
+    const url = req.body && req.body.url;
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
+    // Fail fast with a 400 before kicking off a job; downloadToTemp re-validates
+    // (it's the security boundary) via the same helper.
+    try { remoteFetch.validateFetchUrl(url); }
+    catch (e) { return res.status(400).json({ error: e.message }); }
+    const jobId = scanJobs.startScanFromUrl(project, url);
+    res.status(202).json({ jobId });
+  });
+
+  // Resume a scan-from-url job that parked because the tarball's module layout
+  // didn't line up with the project (compat mismatch).
+  router.post('/api/scan-jobs/:id/confirm', (req, res) => {
+    if (scanJobs.confirmScanFromUrl(req.params.id)) {
+      res.json({ ok: true });
+    } else {
+      res.status(404).json({ error: 'job not awaiting confirmation' });
+    }
   });
 
   router.post('/api/scans/:id/watch', (req, res) => {
