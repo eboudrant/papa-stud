@@ -41,11 +41,22 @@ npm run electron # desktop app
 - Custom profile templates for any screenshot testing tool
 - Delta / Toggle / Slider comparison modes with zoom and pan
 - **Accept baseline** — copy the rendered image over the golden with one click (or bulk accept a whole scan)
+- **Scan from URL** — pull a CI run's results from a tarball link and review them against your local goldens
 - Multi-module Gradle project scanning
 - Video export of failures (requires ffmpeg)
 - Config import / export
 - Dark / light / system theme
 - Desktop app (Electron) or run from source
+
+## Scan from URL
+
+Your screenshot tests run on CI (e.g. Jenkins), and CI publishes the build outputs as a downloadable tarball. Instead of re-running the tests locally, point Papa Stud.io at that tarball to review the failures against your local goldens:
+
+1. Add your project locally (the working copy that holds the committed goldens).
+2. On the project card, click the **Scan from URL** (cloud-download) button next to **Scan**.
+3. Paste the tarball URL (e.g. a Jenkins `…/?tarball=1` link) and hit **Download & Scan**.
+
+Papa Stud.io downloads the tarball and overlays only its `build/` outputs (failure deltas + JUnit) onto your project directory — it never touches your `src/` or goldens — then runs a normal scan. If the tarball's module layout doesn't match the project, it asks for confirmation before writing anything.
 
 ## Testing
 
