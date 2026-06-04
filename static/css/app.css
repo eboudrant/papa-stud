@@ -234,6 +234,15 @@ select.input { appearance: auto; }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: var(--space-md); margin-top: -1px; margin-bottom: var(--space-sm);
 }
+.url-form {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: var(--space-md); margin-top: -1px; margin-bottom: var(--space-sm);
+}
+.url-form-hint { font-size: 11px; color: var(--text-dim); margin-top: var(--space-sm); }
+.url-form-hint code { font-family: monospace; }
+/* Keep the card-action icon button grouped with its siblings (the global
+   .btn-icon:first-of-type auto-margin is meant for the header, not here). */
+.card-actions .btn-icon:first-of-type { margin-left: 0; }
 .profiles-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 .profile-card {
   background: var(--bg); border: 1px solid var(--border); border-radius: 6px;

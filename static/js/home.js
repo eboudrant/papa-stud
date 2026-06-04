@@ -121,8 +121,17 @@ function _renderProjects(projectsList) {
       <div class="card-actions" id="actions-${p.id}">
         <button class="btn btn-sm" onclick="_showProfiles('${escAttr(p.id)}')">Profiles</button>
         <button class="btn btn-primary" onclick="_scanProject('${escAttr(p.id)}')">Scan</button>
+        <button class="btn btn-icon" title="Scan from URL (download a CI result tarball)" onclick="_showScanFromUrl('${escAttr(p.id)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
         <button class="btn btn-danger-text" onclick="_deleteProject('${escAttr(p.id)}')">Remove</button>
       </div>
+    </div>
+    <div class="url-form" id="url-form-${p.id}" style="display:none">
+      <div class="add-form-row">
+        <input type="url" id="url-input-${p.id}" placeholder="https://ci.example.com/.../?tarball=1" class="input input-wide">
+        <button class="btn btn-sm btn-primary" onclick="_scanFromUrl('${escAttr(p.id)}')">Download &amp; Scan</button>
+        <button class="btn btn-sm" onclick="_hideScanFromUrl('${escAttr(p.id)}')">Cancel</button>
+      </div>
+      <div class="url-form-hint">Downloads the tarball and overlays its <code>build/</code> outputs onto this project, then scans against your local goldens.</div>
     </div>
     <div class="profiles-form" id="profiles-${p.id}" style="display:none">
       <div class="profiles-list" id="profiles-list-${p.id}"></div>
@@ -694,7 +703,16 @@ function _pollScanJob(jobId, projectId) {
     const fill = document.getElementById(`fill-${jobId}`);
     const text = document.getElementById(`text-${jobId}`);
 
-    if (job.status === 'discovering') {
+    if (job.status === 'downloading') {
+      if (fill) { fill.classList.add('progress-pulse'); fill.style.width = '100%'; }
+      if (text) text.textContent = 'Downloading tarball...';
+    } else if (job.status === 'extracting') {
+      if (fill) { fill.classList.add('progress-pulse'); fill.style.width = '100%'; }
+      if (text) text.textContent = 'Extracting build outputs...';
+    } else if (job.status === 'needs_confirmation') {
+      _stopPolling(jobId);
+      _handleCompatConfirm(jobId, projectId, job.compat, text);
+    } else if (job.status === 'discovering') {
       if (fill) fill.classList.add('progress-pulse');
       if (text) text.textContent = `Discovering ${job.currentModule}...`;
     } else if (job.status === 'scanning') {
@@ -734,12 +752,86 @@ async function _cancelScan(jobId, projectId) {
   await apiPost(`/api/scan-jobs/${jobId}/cancel`, {});
 }
 
+// --- Scan from URL ---
+
+function _showScanFromUrl(projectId) {
+  const form = document.getElementById(`url-form-${projectId}`);
+  if (form) form.style.display = 'block';
+  const input = document.getElementById(`url-input-${projectId}`);
+  if (input) input.focus();
+}
+
+function _hideScanFromUrl(projectId) {
+  const form = document.getElementById(`url-form-${projectId}`);
+  if (form) form.style.display = 'none';
+}
+
+async function _scanFromUrl(projectId) {
+  const input = document.getElementById(`url-input-${projectId}`);
+  const url = (input && input.value || '').trim();
+  if (!url) return;
+  _hideScanFromUrl(projectId);
+
+  let resp;
+  try {
+    resp = await apiPost(`/api/projects/${projectId}/scan-from-url`, { url });
+  } catch (err) {
+    showToast(err.message || 'Failed to start download', 'error');
+    return;
+  }
+  const jobId = resp.jobId;
+
+  const actionsEl = document.getElementById(`actions-${projectId}`);
+  if (actionsEl) {
+    actionsEl.innerHTML = `
+      <div class="scan-progress">
+        <div class="progress-bar-wrap">
+          <div class="progress-fill progress-pulse" id="fill-${jobId}" style="width:100%"></div>
+        </div>
+        <span class="progress-text" id="text-${jobId}">Downloading tarball...</span>
+        <button class="btn btn-sm btn-danger-text" onclick="_cancelScan('${jobId}', '${projectId}')">Cancel</button>
+      </div>
+    `;
+  }
+
+  _pollScanJob(jobId, projectId);
+}
+
+// The tarball's module layout didn't line up with the project. Ask the user
+// whether to overlay it anyway, then resume (confirm) or abandon (cancel).
+async function _handleCompatConfirm(jobId, projectId, compat, textEl) {
+  const matched = (compat && compat.matched) || [];
+  const unmatched = (compat && compat.unmatched) || [];
+  const sample = unmatched.slice(0, 8).map(m => m || '(project root)').join('\n  ');
+  const more = unmatched.length > 8 ? `\n  …and ${unmatched.length - 8} more` : '';
+  const msg =
+    `None of the tarball's modules match this project's directory layout.\n\n` +
+    `Modules in the tarball not found locally:\n  ${sample}${more}\n\n` +
+    `Extract anyway? Build outputs will be written into the project directory.`;
+  if (window.confirm(msg)) {
+    if (textEl) textEl.textContent = 'Extracting build outputs...';
+    try {
+      await apiPost(`/api/scan-jobs/${jobId}/confirm`, {});
+    } catch (err) {
+      showToast(err.message || 'Failed to confirm', 'error');
+      _restoreScanButton(projectId);
+      return;
+    }
+    _pollScanJob(jobId, projectId);
+  } else {
+    await apiPost(`/api/scan-jobs/${jobId}/cancel`, {}).catch(() => {});
+    showToast('Scan from URL cancelled.', 'info');
+    _restoreScanButton(projectId);
+  }
+}
+
 function _restoreScanButton(projectId) {
   const actionsEl = document.getElementById(`actions-${projectId}`);
   if (actionsEl) {
     actionsEl.innerHTML = `
       <button class="btn btn-sm" onclick="_showProfiles('${escAttr(projectId)}')">Profiles</button>
       <button class="btn btn-primary" onclick="_scanProject('${escAttr(projectId)}')">Scan</button>
+      <button class="btn btn-icon" title="Scan from URL (download a CI result tarball)" onclick="_showScanFromUrl('${escAttr(projectId)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
       <button class="btn btn-danger-text" onclick="_deleteProject('${escAttr(projectId)}')">Remove</button>
     `;
   }

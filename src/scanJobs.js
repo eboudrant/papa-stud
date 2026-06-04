@@ -10,6 +10,7 @@ const projects = require('./projects');
 const { scanProjectIncrementalSync, processSingleModule } = require('./scanner');
 const { createWatcher } = require('./watcher');
 const { getStrategy } = require('./strategies');
+const remoteFetch = require('./remoteFetch');
 
 function projectCacheDir(projectId) {
   return path.join(projects.getDataDir(), 'cache', 'xcresult', projectId);
@@ -71,6 +72,7 @@ function getJob(jobId) {
     failuresFound: job.failures_found,
     scanId: job.scan_id,
     error: job.error,
+    compat: job.compat || null,
   };
 }
 
@@ -78,12 +80,28 @@ function cancelJob(jobId) {
   const job = jobs.get(jobId);
   if (!job) return false;
   job._cancel();
+  // A job parked awaiting the compat-mismatch confirmation will never resume,
+  // so finalize it and drop its downloaded tarball now.
+  if (job.status === 'needs_confirmation') {
+    remoteFetch.cleanupTemp(job._tarFile);
+    job._tarFile = null;
+    job.status = 'cancelled';
+    job._finished_at = Date.now();
+  }
   return true;
 }
 
 function cleanupOldJobs() {
   const now = Date.now();
   for (const [id, job] of jobs) {
+    // Drop a tarball left parked on an un-confirmed fetch job that's gone stale.
+    if (job.status === 'needs_confirmation' && job._parked_at && now - job._parked_at > JOB_TTL) {
+      remoteFetch.cleanupTemp(job._tarFile);
+      job._tarFile = null;
+      job.status = 'failed';
+      job.error = 'confirmation timed out';
+      job._finished_at = now;
+    }
     if (job._finished_at && now - job._finished_at > JOB_TTL) {
       jobs.delete(id);
     }
@@ -152,6 +170,111 @@ function runScan(jobId, project) {
   processNext();
 }
 
+// --- Scan from URL (download a CI result tarball, overlay it, then scan) ---
+
+// Kick off a download + extract + scan against an existing project. The
+// tarball's `build/` artifacts are overlaid onto the project dir so the scan
+// pairs CI's failure deltas with the project's local goldens.
+function startScanFromUrl(project, url) {
+  cleanupOldJobs();
+  const { id: projectId, name } = project;
+  log(`[fetch] scan-from-url for "${name}" <- ${url}`);
+  const jobId = crypto.randomBytes(4).toString('hex');
+  let cancelled = false;
+  const job = {
+    id: jobId,
+    projectId,
+    projectName: name,
+    status: 'downloading',
+    total_modules: 0,
+    scanned_modules: 0,
+    modules_found: 0,
+    current_module: '',
+    failures_found: 0,
+    scan_id: null,
+    error: null,
+    compat: null,
+    _cancelFn: () => cancelled,
+    _cancel: () => { cancelled = true; },
+    _finished_at: null,
+    _project: project,
+    _tarFile: null,
+    _members: null,
+    _parked_at: null,
+  };
+  jobs.set(jobId, job);
+  setImmediate(() => runFetch(jobId, project, url));
+  return jobId;
+}
+
+function failJob(job, message) {
+  job.status = 'failed';
+  job.error = message;
+  job._finished_at = Date.now();
+}
+
+async function runFetch(jobId, project, url) {
+  const job = jobs.get(jobId);
+  if (!job) return;
+  try {
+    const tarFile = await remoteFetch.downloadToTemp(url);
+    if (job._cancelFn()) {
+      remoteFetch.cleanupTemp(tarFile);
+      job.status = 'cancelled';
+      job._finished_at = Date.now();
+      return;
+    }
+    job._tarFile = tarFile;
+    job.status = 'extracting';
+    const members = remoteFetch.listBuildMembers(tarFile);
+    if (!members.length) throw new Error('no build/ artifacts found in archive');
+    job._members = members;
+    const compat = remoteFetch.checkCompat(members, project.path);
+    if (!compat.compatible) {
+      // Park: nothing in the tarball maps onto this project. Wait for the user
+      // to confirm (or cancel) before writing into their working copy.
+      job.compat = compat;
+      job.status = 'needs_confirmation';
+      job._parked_at = Date.now();
+      return;
+    }
+    doExtractAndScan(jobId, project, tarFile, members);
+  } catch (e) {
+    failJob(job, e.message);
+    remoteFetch.cleanupTemp(job._tarFile);
+    job._tarFile = null;
+  }
+}
+
+// Resume a job parked on a compat-mismatch confirmation.
+function confirmScanFromUrl(jobId) {
+  const job = jobs.get(jobId);
+  if (!job || job.status !== 'needs_confirmation') return false;
+  job.status = 'extracting';
+  // Defer the (blocking) extract off the request so /confirm returns immediately.
+  const { _project, _tarFile, _members } = job;
+  setImmediate(() => doExtractAndScan(jobId, _project, _tarFile, _members));
+  return true;
+}
+
+function doExtractAndScan(jobId, project, tarFile, members) {
+  const job = jobs.get(jobId);
+  if (!job) { remoteFetch.cleanupTemp(tarFile); return; }
+  try {
+    remoteFetch.extractBuildMembers(tarFile, members, project.path);
+  } catch (e) {
+    failJob(job, e.message);
+    remoteFetch.cleanupTemp(tarFile);
+    job._tarFile = null;
+    return;
+  }
+  remoteFetch.cleanupTemp(tarFile);
+  job._tarFile = null;
+  // Hand off to the normal scan flow against the now-overlaid project dir.
+  job.status = 'discovering';
+  runScan(jobId, project);
+}
+
 // --- Watcher management ---
 
 function startWatching(scanId) {
@@ -200,4 +323,8 @@ function isWatching(scanId) {
   return watchers.has(scanId);
 }
 
-module.exports = { startScan, getJob, cancelJob, startWatching, stopWatching, isWatching };
+module.exports = {
+  startScan, startScanFromUrl, confirmScanFromUrl,
+  getJob, cancelJob,
+  startWatching, stopWatching, isWatching,
+};
