@@ -14,6 +14,7 @@ const config = require('./config');
 const updateCheck = require('./updateCheck');
 const apng = require('./apng');
 const imageSlice = require('./imageSlice');
+const remoteFetch = require('./remoteFetch');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
 const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
@@ -268,11 +269,10 @@ function createRouter() {
     if (!project) return res.status(404).json({ error: 'project not found' });
     const url = req.body && req.body.url;
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
-    let parsed;
-    try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'invalid url' }); }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return res.status(400).json({ error: 'only http(s) urls are supported' });
-    }
+    // Fail fast with a 400 before kicking off a job; downloadToTemp re-validates
+    // (it's the security boundary) via the same helper.
+    try { remoteFetch.validateFetchUrl(url); }
+    catch (e) { return res.status(400).json({ error: e.message }); }
     const jobId = scanJobs.startScanFromUrl(project, url);
     res.status(202).json({ jobId });
   });

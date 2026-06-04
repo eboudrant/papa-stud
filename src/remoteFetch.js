@@ -25,15 +25,22 @@ const { spawnSync } = require('child_process');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 
-// Stream a remote tarball to a temp file. Returns the temp file path.
-// Throws on a non-http(s) URL or a non-2xx response.
-async function downloadToTemp(url) {
+// Parse and validate a fetch URL. Returns the URL object; throws on a
+// malformed or non-http(s) URL. Shared by the route handler (fail fast with a
+// 400) and downloadToTemp (the security boundary).
+function validateFetchUrl(url) {
   let parsed;
   try { parsed = new URL(url); } catch { throw new Error('invalid URL'); }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('only http(s) URLs are supported');
   }
+  return parsed;
+}
 
+// Stream a remote tarball to a temp file. Returns the temp file path.
+// Throws on a non-http(s) URL or a non-2xx response.
+async function downloadToTemp(url) {
+  validateFetchUrl(url);
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
   if (!res.body) throw new Error('download failed: empty response body');
@@ -106,23 +113,16 @@ function checkCompat(members, projectRoot) {
   return { modules, matched, unmatched, compatible: matched.length > 0 };
 }
 
-// The `<moduleRoot>/build` directory a member lives under, e.g.
-// `libraries/x/build/paparazzi/failures/d.png` -> `libraries/x/build`.
-function buildDirOf(member) {
-  const root = moduleRootOf(member);
-  return root ? `${root}/build` : 'build';
+// The `<moduleRoot>/build` directories for a set of module roots (as returned
+// by checkCompat). Deriving from the distinct roots avoids re-walking every
+// archive member a second time just to recompute the same prefixes.
+function buildDirsForModules(moduleRoots) {
+  return moduleRoots.map(root => (root ? `${root}/build` : 'build')).sort();
 }
 
-// Distinct `build` directories covering the given members.
-function buildDirsOf(members) {
-  const dirs = new Set();
-  for (const m of members) dirs.add(buildDirOf(m));
-  return [...dirs].sort();
-}
-
-// Extract the build outputs for the given members into projectRoot.
+// Extract the `<module>/build` directories into projectRoot.
 //
-// We extract whole `<module>/build` *directories* rather than individual files:
+// We extract whole `build` *directories* rather than individual files:
 // Paparazzi parameterized snapshot names contain `[...]` brackets, which bsdtar
 // interprets as glob character-classes when matching members — so a per-file
 // `-T` list silently matches nothing ("Not found in archive"). Module/build
@@ -130,9 +130,9 @@ function buildDirsOf(members) {
 // recreates the subtree recursively. `src/` (and anything outside a build dir)
 // is never named, so goldens/source are never touched. The directory list goes
 // through `-T <listfile>` so a monorepo with many modules can't hit the arg limit.
-function extractBuildMembers(tarFile, members, projectRoot) {
-  if (!members.length) return 0;
-  const dirs = buildDirsOf(members);
+function extractBuildDirs(tarFile, moduleRoots, projectRoot) {
+  if (!moduleRoots.length) return 0;
+  const dirs = buildDirsForModules(moduleRoots);
   const listFile = path.join(path.dirname(tarFile), `builddirs-${crypto.randomBytes(4).toString('hex')}.txt`);
   fs.writeFileSync(listFile, dirs.join('\n') + '\n');
   try {
@@ -155,15 +155,15 @@ function cleanupTemp(tarFile) {
 }
 
 module.exports = {
+  validateFetchUrl,
   downloadToTemp,
   listBuildMembers,
   checkCompat,
-  extractBuildMembers,
+  extractBuildDirs,
   cleanupTemp,
   // exported for tests
   isUnsafeMember,
   isBuildMember,
   moduleRootOf,
-  buildDirOf,
-  buildDirsOf,
+  buildDirsForModules,
 };

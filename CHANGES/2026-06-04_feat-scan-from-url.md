@@ -27,7 +27,7 @@ deltas with your local baselines and accept-baseline writes back to the real rep
   under a `build/` segment, and rejects absolute / `..` traversal paths.
 - `checkCompat(members, projectRoot)` — reports which module roots from the tarball exist locally;
   `compatible` is false only when nothing lines up.
-- `extractBuildMembers(...)` — extracts whole `<module>/build` directories into the project dir
+- `extractBuildDirs(...)` — extracts whole `<module>/build` directories into the project dir
   (`tar -T` with directory entries), never touching `src/` or goldens. Extracting directories
   rather than per-file is deliberate: bsdtar glob-interprets `-T` member entries, so Paparazzi
   parameterized snapshot names containing `[...]` brackets silently match nothing; directory paths

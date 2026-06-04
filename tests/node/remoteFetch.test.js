@@ -83,13 +83,13 @@ describe('remoteFetch pure helpers', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('extractBuildMembers writes only the listed members', () => {
+  it('extractBuildDirs extracts the module build dir, not src/', () => {
     const tar = makeTar({
       'app/build/paparazzi/failures/d.png': 'delta',
       'app/src/test/snapshots/g.png': 'golden',
     });
     const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-extract-'));
-    remoteFetch.extractBuildMembers(tar, ['app/build/paparazzi/failures/d.png'], dest);
+    remoteFetch.extractBuildDirs(tar, ['app'], dest);
     assert.ok(fs.existsSync(path.join(dest, 'app/build/paparazzi/failures/d.png')));
     assert.ok(!fs.existsSync(path.join(dest, 'app/src/test/snapshots/g.png')));
     fs.rmSync(path.dirname(tar), { recursive: true, force: true });
@@ -105,25 +105,21 @@ describe('remoteFetch pure helpers', () => {
       [`mod/build/paparazzi/failures/${bracketName}`]: 'delta',
       'mod/src/test/snapshots/g.png': 'golden',
     });
-    const members = remoteFetch.listBuildMembers(tar);
+    const { modules } = remoteFetch.checkCompat(remoteFetch.listBuildMembers(tar), '/tmp');
     const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-bracket-'));
-    remoteFetch.extractBuildMembers(tar, members, dest);
+    remoteFetch.extractBuildDirs(tar, modules, dest);
     assert.ok(fs.existsSync(path.join(dest, 'mod/build/paparazzi/failures', bracketName)));
     assert.ok(!fs.existsSync(path.join(dest, 'mod/src/test/snapshots/g.png')));
     fs.rmSync(path.dirname(tar), { recursive: true, force: true });
     fs.rmSync(dest, { recursive: true, force: true });
   });
 
-  it('buildDirsOf dedups to <module>/build directories', () => {
+  it('buildDirsForModules maps module roots to sorted <root>/build dirs', () => {
     assert.deepEqual(
-      remoteFetch.buildDirsOf([
-        'libraries/x/build/paparazzi/failures/a.png',
-        'libraries/x/build/test-results/v/TEST-A.xml',
-        'app/build/outputs/roborazzi/b.png',
-      ]),
+      remoteFetch.buildDirsForModules(['libraries/x', 'app']),
       ['app/build', 'libraries/x/build']
     );
-    assert.deepEqual(remoteFetch.buildDirsOf(['build/x.png']), ['build']);
+    assert.deepEqual(remoteFetch.buildDirsForModules(['']), ['build']);
   });
 });
 

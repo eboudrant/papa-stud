@@ -28,17 +28,16 @@ const jobs = new Map();
 const watchers = new Map(); // scanId -> watcher
 const JOB_TTL = 300_000; // 5 minutes in ms
 
-function startScan(project) {
-  cleanupOldJobs();
-  const { id: projectId, name, path: projectPath, profiles, strategy: strategyName } = project;
-  log(`[scan] starting scan for "${name}" at ${projectPath} (${profiles?.length || 0} profiles, strategy: ${strategyName || 'gradle'})`);
+// Build and register a job with the shared progress shape. `extra` carries
+// status-specific fields (e.g. the fetch job's tarball bookkeeping).
+function makeJob(project, status, extra = {}) {
   const jobId = crypto.randomBytes(4).toString('hex');
   let cancelled = false;
   const job = {
     id: jobId,
-    projectId,
-    projectName: name,
-    status: 'discovering',
+    projectId: project.id,
+    projectName: project.name,
+    status,
     total_modules: 0,
     scanned_modules: 0,
     modules_found: 0,
@@ -49,12 +48,31 @@ function startScan(project) {
     _cancelFn: () => cancelled,
     _cancel: () => { cancelled = true; },
     _finished_at: null,
+    ...extra,
   };
   jobs.set(jobId, job);
+  return job;
+}
 
+// Move a job to a terminal state, releasing any downloaded tarball exactly
+// once. Every terminal transition (cancel, timeout, failure) goes through here
+// so the temp file can't be leaked.
+function finishJob(job, status, error = null) {
+  remoteFetch.cleanupTemp(job._tarFile);
+  job._tarFile = null;
+  job.status = status;
+  if (error !== null) job.error = error;
+  job._finished_at = Date.now();
+}
+
+function startScan(project) {
+  cleanupOldJobs();
+  const { name, path: projectPath, profiles, strategy: strategyName } = project;
+  log(`[scan] starting scan for "${name}" at ${projectPath} (${profiles?.length || 0} profiles, strategy: ${strategyName || 'gradle'})`);
+  const job = makeJob(project, 'discovering');
   // Run scan asynchronously via setImmediate chunks
-  setImmediate(() => runScan(jobId, project));
-  return jobId;
+  setImmediate(() => runScan(job.id, project));
+  return job.id;
 }
 
 function getJob(jobId) {
@@ -82,12 +100,7 @@ function cancelJob(jobId) {
   job._cancel();
   // A job parked awaiting the compat-mismatch confirmation will never resume,
   // so finalize it and drop its downloaded tarball now.
-  if (job.status === 'needs_confirmation') {
-    remoteFetch.cleanupTemp(job._tarFile);
-    job._tarFile = null;
-    job.status = 'cancelled';
-    job._finished_at = Date.now();
-  }
+  if (job.status === 'needs_confirmation') finishJob(job, 'cancelled');
   return true;
 }
 
@@ -96,11 +109,7 @@ function cleanupOldJobs() {
   for (const [id, job] of jobs) {
     // Drop a tarball left parked on an un-confirmed fetch job that's gone stale.
     if (job.status === 'needs_confirmation' && job._parked_at && now - job._parked_at > JOB_TTL) {
-      remoteFetch.cleanupTemp(job._tarFile);
-      job._tarFile = null;
-      job.status = 'failed';
-      job.error = 'confirmation timed out';
-      job._finished_at = now;
+      finishJob(job, 'failed', 'confirmation timed out');
     }
     if (job._finished_at && now - job._finished_at > JOB_TTL) {
       jobs.delete(id);
@@ -177,40 +186,12 @@ function runScan(jobId, project) {
 // pairs CI's failure deltas with the project's local goldens.
 function startScanFromUrl(project, url) {
   cleanupOldJobs();
-  const { id: projectId, name } = project;
-  log(`[fetch] scan-from-url for "${name}" <- ${url}`);
-  const jobId = crypto.randomBytes(4).toString('hex');
-  let cancelled = false;
-  const job = {
-    id: jobId,
-    projectId,
-    projectName: name,
-    status: 'downloading',
-    total_modules: 0,
-    scanned_modules: 0,
-    modules_found: 0,
-    current_module: '',
-    failures_found: 0,
-    scan_id: null,
-    error: null,
-    compat: null,
-    _cancelFn: () => cancelled,
-    _cancel: () => { cancelled = true; },
-    _finished_at: null,
-    _project: project,
-    _tarFile: null,
-    _members: null,
-    _parked_at: null,
-  };
-  jobs.set(jobId, job);
-  setImmediate(() => runFetch(jobId, project, url));
-  return jobId;
-}
-
-function failJob(job, message) {
-  job.status = 'failed';
-  job.error = message;
-  job._finished_at = Date.now();
+  log(`[fetch] scan-from-url for "${project.name}" <- ${url}`);
+  const job = makeJob(project, 'downloading', {
+    _project: project, _tarFile: null, _modules: null, _parked_at: null,
+  });
+  setImmediate(() => runFetch(job.id, project, url));
+  return job.id;
 }
 
 async function runFetch(jobId, project, url) {
@@ -218,18 +199,13 @@ async function runFetch(jobId, project, url) {
   if (!job) return;
   try {
     const tarFile = await remoteFetch.downloadToTemp(url);
-    if (job._cancelFn()) {
-      remoteFetch.cleanupTemp(tarFile);
-      job.status = 'cancelled';
-      job._finished_at = Date.now();
-      return;
-    }
     job._tarFile = tarFile;
+    if (job._cancelFn()) return finishJob(job, 'cancelled');
     job.status = 'extracting';
     const members = remoteFetch.listBuildMembers(tarFile);
     if (!members.length) throw new Error('no build/ artifacts found in archive');
-    job._members = members;
     const compat = remoteFetch.checkCompat(members, project.path);
+    job._modules = compat.modules;
     if (!compat.compatible) {
       // Park: nothing in the tarball maps onto this project. Wait for the user
       // to confirm (or cancel) before writing into their working copy.
@@ -238,11 +214,9 @@ async function runFetch(jobId, project, url) {
       job._parked_at = Date.now();
       return;
     }
-    doExtractAndScan(jobId, project, tarFile, members);
+    doExtractAndScan(jobId, project, tarFile, compat.modules);
   } catch (e) {
-    failJob(job, e.message);
-    remoteFetch.cleanupTemp(job._tarFile);
-    job._tarFile = null;
+    finishJob(job, 'failed', e.message);
   }
 }
 
@@ -252,20 +226,18 @@ function confirmScanFromUrl(jobId) {
   if (!job || job.status !== 'needs_confirmation') return false;
   job.status = 'extracting';
   // Defer the (blocking) extract off the request so /confirm returns immediately.
-  const { _project, _tarFile, _members } = job;
-  setImmediate(() => doExtractAndScan(jobId, _project, _tarFile, _members));
+  const { _project, _tarFile, _modules } = job;
+  setImmediate(() => doExtractAndScan(jobId, _project, _tarFile, _modules));
   return true;
 }
 
-function doExtractAndScan(jobId, project, tarFile, members) {
+function doExtractAndScan(jobId, project, tarFile, moduleRoots) {
   const job = jobs.get(jobId);
   if (!job) { remoteFetch.cleanupTemp(tarFile); return; }
   try {
-    remoteFetch.extractBuildMembers(tarFile, members, project.path);
+    remoteFetch.extractBuildDirs(tarFile, moduleRoots, project.path);
   } catch (e) {
-    failJob(job, e.message);
-    remoteFetch.cleanupTemp(tarFile);
-    job._tarFile = null;
+    finishJob(job, 'failed', e.message);
     return;
   }
   remoteFetch.cleanupTemp(tarFile);

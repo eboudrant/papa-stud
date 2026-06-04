@@ -118,12 +118,7 @@ function _renderProjects(projectsList) {
         <div class="card-subtitle">${escHtml(p.path)}</div>
         <div class="card-profiles">${profileTags}</div>
       </div>
-      <div class="card-actions" id="actions-${p.id}">
-        <button class="btn btn-sm" onclick="_showProfiles('${escAttr(p.id)}')">Profiles</button>
-        <button class="btn btn-primary" onclick="_scanProject('${escAttr(p.id)}')">Scan</button>
-        <button class="btn btn-icon" title="Scan from URL (download a CI result tarball)" onclick="_showScanFromUrl('${escAttr(p.id)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-        <button class="btn btn-danger-text" onclick="_deleteProject('${escAttr(p.id)}')">Remove</button>
-      </div>
+      <div class="card-actions" id="actions-${p.id}">${_projectActionsHtml(p.id)}</div>
     </div>
     <div class="url-form" id="url-form-${p.id}" style="display:none">
       <div class="add-form-row">
@@ -703,12 +698,10 @@ function _pollScanJob(jobId, projectId) {
     const fill = document.getElementById(`fill-${jobId}`);
     const text = document.getElementById(`text-${jobId}`);
 
-    if (job.status === 'downloading') {
+    const FETCH_LABELS = { downloading: 'Downloading tarball...', extracting: 'Extracting build outputs...' };
+    if (FETCH_LABELS[job.status]) {
       if (fill) { fill.classList.add('progress-pulse'); fill.style.width = '100%'; }
-      if (text) text.textContent = 'Downloading tarball...';
-    } else if (job.status === 'extracting') {
-      if (fill) { fill.classList.add('progress-pulse'); fill.style.width = '100%'; }
-      if (text) text.textContent = 'Extracting build outputs...';
+      if (text) text.textContent = FETCH_LABELS[job.status];
     } else if (job.status === 'needs_confirmation') {
       _stopPolling(jobId);
       _handleCompatConfirm(jobId, projectId, job.compat, text);
@@ -800,7 +793,6 @@ async function _scanFromUrl(projectId) {
 // The tarball's module layout didn't line up with the project. Ask the user
 // whether to overlay it anyway, then resume (confirm) or abandon (cancel).
 async function _handleCompatConfirm(jobId, projectId, compat, textEl) {
-  const matched = (compat && compat.matched) || [];
   const unmatched = (compat && compat.unmatched) || [];
   const sample = unmatched.slice(0, 8).map(m => m || '(project root)').join('\n  ');
   const more = unmatched.length > 8 ? `\n  …and ${unmatched.length - 8} more` : '';
@@ -825,16 +817,21 @@ async function _handleCompatConfirm(jobId, projectId, compat, textEl) {
   }
 }
 
+// Project card action buttons. Shared by the initial render and the post-scan
+// restore so the button set (and the Scan-from-URL icon) can't drift.
+function _projectActionsHtml(projectId) {
+  const id = escAttr(projectId);
+  return `
+      <button class="btn btn-sm" onclick="_showProfiles('${id}')">Profiles</button>
+      <button class="btn btn-primary" onclick="_scanProject('${id}')">Scan</button>
+      <button class="btn btn-icon" title="Scan from URL (download a CI result tarball)" onclick="_showScanFromUrl('${id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+      <button class="btn btn-danger-text" onclick="_deleteProject('${id}')">Remove</button>
+    `;
+}
+
 function _restoreScanButton(projectId) {
   const actionsEl = document.getElementById(`actions-${projectId}`);
-  if (actionsEl) {
-    actionsEl.innerHTML = `
-      <button class="btn btn-sm" onclick="_showProfiles('${escAttr(projectId)}')">Profiles</button>
-      <button class="btn btn-primary" onclick="_scanProject('${escAttr(projectId)}')">Scan</button>
-      <button class="btn btn-icon" title="Scan from URL (download a CI result tarball)" onclick="_showScanFromUrl('${escAttr(projectId)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-      <button class="btn btn-danger-text" onclick="_deleteProject('${escAttr(projectId)}')">Remove</button>
-    `;
-  }
+  if (actionsEl) actionsEl.innerHTML = _projectActionsHtml(projectId);
 }
 
 
