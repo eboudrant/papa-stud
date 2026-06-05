@@ -30,7 +30,7 @@ jobs:
         # Node 24 (only 8.0.0-alpha does today).
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Set version in package.json
         run: npm version ${{ inputs.version }} --no-git-tag-version
