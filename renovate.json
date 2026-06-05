@@ -12,6 +12,12 @@
     {
       "matchManagers": ["dockerfile"],
       "groupName": "docker base images"
+    },
+    {
+      "description": "Pin the CI/release runner Node version manually. electron-forge 7.11.2 (latest stable) silently fails to build installers under Node 24.x; the release build is intentionally held at Node 22. Revisit when a stable electron-forge supports Node 24.",
+      "matchManagers": ["github-actions"],
+      "matchDepNames": ["node"],
+      "enabled": false
     }
   ]
 }
