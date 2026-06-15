@@ -26,6 +26,26 @@ let mainWindow;
 let server;
 let port;
 
+// Single instance only. Every instance shares the same userData/data/ directory
+// (projects.json, scans/, index.json) with no cross-process lock, so a second
+// instance racing scans/accepts against the first would clobber data
+// last-writer-wins. The embedded server binds 127.0.0.1:0 (a random port), so
+// instances don't conflict on the socket — nothing else stops a second launch.
+// Take the OS single-instance lock and, on a second launch, focus the existing
+// window instead of opening a new one.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // --- Logging ---
 
 function setupLogging() {
@@ -271,21 +291,25 @@ ipcMain.on('toggle-maximize', () => {
   else mainWindow.maximize();
 });
 
-app.whenReady().then(async () => {
-  setupLogging();
-  buildMenu();
-  // In dev, macOS shows Electron's default dock icon; packaged builds use
-  // forge.config.js's icon field automatically.
-  if (process.platform === 'darwin' && app.dock) {
-    try { app.dock.setIcon(path.join(__dirname, '..', 'static', 'icon.png')); } catch {}
-  }
-  await startServer();
-  createWindow();
+// Guard on the lock: the losing instance has already called app.quit() above and
+// must not boot a second server/window before it exits.
+if (gotSingleInstanceLock) {
+  app.whenReady().then(async () => {
+    setupLogging();
+    buildMenu();
+    // In dev, macOS shows Electron's default dock icon; packaged builds use
+    // forge.config.js's icon field automatically.
+    if (process.platform === 'darwin' && app.dock) {
+      try { app.dock.setIcon(path.join(__dirname, '..', 'static', 'icon.png')); } catch {}
+    }
+    await startServer();
+    createWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
   });
-});
+}
 
 app.on('window-all-closed', () => {
   app.quit();
