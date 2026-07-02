@@ -234,16 +234,21 @@ async function _createTemplate() {
   const name = document.getElementById('tmpl-name').value.trim();
   const tool = document.getElementById('tmpl-tool').value.trim();
   if (!name) return;
-  await apiPost('/api/templates', {
-    name,
-    tool: tool || 'custom',
-    description: document.getElementById('tmpl-desc').value.trim(),
-    failures_dir: document.getElementById('tmpl-failures').value.trim(),
-    golden_patterns: document.getElementById('tmpl-patterns').value.split('\n').filter(Boolean),
-    delta_prefix: document.getElementById('tmpl-delta-prefix').value,
-    delta_suffix: document.getElementById('tmpl-delta-suffix').value,
-    actual_suffix: document.getElementById('tmpl-actual-suffix').value,
-  });
+  try {
+    await apiPost('/api/templates', {
+      name,
+      tool: tool || 'custom',
+      description: document.getElementById('tmpl-desc').value.trim(),
+      failures_dir: document.getElementById('tmpl-failures').value.trim(),
+      golden_patterns: document.getElementById('tmpl-patterns').value.split('\n').filter(Boolean),
+      delta_prefix: document.getElementById('tmpl-delta-prefix').value,
+      delta_suffix: document.getElementById('tmpl-delta-suffix').value,
+      actual_suffix: document.getElementById('tmpl-actual-suffix').value,
+    });
+  } catch (err) {
+    showToast(err.message || 'Failed to save template', 'error');
+    return;
+  }
   document.getElementById('create-template-form').style.display = 'none';
   await _loadHome();
 }
@@ -283,17 +288,22 @@ async function _editTemplate(id) {
 }
 
 async function _updateTemplate(id) {
-  await apiPost('/api/templates', {
-    id,
-    name: document.getElementById('tmpl-name').value.trim(),
-    tool: document.getElementById('tmpl-tool').value.trim() || 'custom',
-    description: document.getElementById('tmpl-desc').value.trim(),
-    failures_dir: document.getElementById('tmpl-failures').value.trim(),
-    golden_patterns: document.getElementById('tmpl-patterns').value.split('\n').filter(Boolean),
-    delta_prefix: document.getElementById('tmpl-delta-prefix').value,
-    delta_suffix: document.getElementById('tmpl-delta-suffix').value,
-    actual_suffix: document.getElementById('tmpl-actual-suffix').value,
-  });
+  try {
+    await apiPost('/api/templates', {
+      id,
+      name: document.getElementById('tmpl-name').value.trim(),
+      tool: document.getElementById('tmpl-tool').value.trim() || 'custom',
+      description: document.getElementById('tmpl-desc').value.trim(),
+      failures_dir: document.getElementById('tmpl-failures').value.trim(),
+      golden_patterns: document.getElementById('tmpl-patterns').value.split('\n').filter(Boolean),
+      delta_prefix: document.getElementById('tmpl-delta-prefix').value,
+      delta_suffix: document.getElementById('tmpl-delta-suffix').value,
+      actual_suffix: document.getElementById('tmpl-actual-suffix').value,
+    });
+  } catch (err) {
+    showToast(err.message || 'Failed to save template', 'error');
+    return;
+  }
   document.getElementById('create-template-form').style.display = 'none';
   await _loadHome();
 }
