@@ -14,6 +14,7 @@ let _activeSort = localStorage.getItem('papastud_sort') || null;
 let _watching = false;
 let _watchPollTimer = null;
 let _lastStatsJson = '';
+let _rescanPollTimer = null;
 
 function showReview(scanId) {
   const content = document.getElementById('content');
@@ -79,6 +80,7 @@ function showReview(scanId) {
   return () => {
     if (_observer) _observer.disconnect();
     _stopWatchPoll();
+    if (_rescanPollTimer) { clearInterval(_rescanPollTimer); _rescanPollTimer = null; }
     clearTimeout(_searchTimeout);
     document.removeEventListener('keydown', _keyHandler);
   };
@@ -441,12 +443,26 @@ async function _rescanFromReview(scanId) {
   const resp = await apiPost(`/api/projects/${scan.projectId}/scan`, {});
   if (resp?.jobId) {
     // Poll until complete then navigate to the new scan
-    const poll = setInterval(async () => {
-      const job = await apiGet(`/api/scan-jobs/${resp.jobId}`);
-      if (!job || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
-        clearInterval(poll);
-        if (job?.scanId) navigate(`/scans/${job.scanId}`);
-        else _resetAndReload();
+    _rescanPollTimer = setInterval(async () => {
+      try {
+        const job = await apiGet(`/api/scan-jobs/${resp.jobId}`);
+        if (!job || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+          clearInterval(_rescanPollTimer);
+          _rescanPollTimer = null;
+          // Only act if the review page for this scan is still active.
+          if (_scanData && _scanData.id === scanId) {
+            if (job?.scanId) navigate(`/scans/${job.scanId}`);
+            else _resetAndReload();
+          }
+        }
+      } catch (e) {
+        // apiGet throws on any non-2xx (e.g. job TTL expiry -> 404), so
+        // without this the interval would reject unhandled forever.
+        clearInterval(_rescanPollTimer);
+        _rescanPollTimer = null;
+        const errBtn = document.querySelector('[onclick*="rescanFromReview"]');
+        if (errBtn) { errBtn.textContent = 'Re-scan'; errBtn.disabled = false; }
+        console.error('[rescan-poll] stopped:', e);
       }
     }, 1500);
   }
@@ -494,14 +510,21 @@ function _startWatchPoll(scanId) {
   _stopWatchPoll();
   _lastStatsJson = JSON.stringify(_scanData?.stats);
   _watchPollTimer = setInterval(async () => {
-    // Light check: only fetch stats via size=0 to detect changes
-    const check = await apiGet(`/api/scans/${scanId}?page=0&size=0`);
-    if (!check) return;
-    const newStats = JSON.stringify(check.stats);
-    if (newStats !== _lastStatsJson) {
-      _lastStatsJson = newStats;
-      // Stats changed — reload the current view
-      _resetAndReload();
+    try {
+      // Light check: only fetch stats via size=0 to detect changes
+      const check = await apiGet(`/api/scans/${scanId}?page=0&size=0`);
+      if (!check) return;
+      const newStats = JSON.stringify(check.stats);
+      if (newStats !== _lastStatsJson) {
+        _lastStatsJson = newStats;
+        // Stats changed — reload the current view
+        _resetAndReload();
+      }
+    } catch (e) {
+      // apiGet throws on any non-2xx (e.g. scan deleted -> 404), so
+      // without this the interval would reject unhandled forever.
+      _stopWatchPoll();
+      console.error('[watch-poll] stopped:', e);
     }
   }, 2000);
 }
