@@ -153,6 +153,48 @@ describe('one scan per project', () => {
   });
 });
 
+describe('deleteProject cascades to scans', () => {
+  it('removes the project scan file and its index entry', () => {
+    const proj = projects.addProject('CascadeProj', '/tmp/cascade');
+    const scan = projects.createScanFromResults(proj.id, 'CascadeProj', '/tmp/cascade', [], []);
+    assert.ok(projects.listScans().some(s => s.id === scan.id));
+    assert.ok(fs.existsSync(projects.scanPath(scan.id)));
+
+    projects.deleteProject(proj.id);
+
+    assert.ok(!fs.existsSync(projects.scanPath(scan.id)));
+    assert.ok(!projects.listScans().some(s => s.id === scan.id));
+  });
+
+  it('leaves other projects scans untouched', () => {
+    const projA = projects.addProject('A', '/tmp/a');
+    const projB = projects.addProject('B', '/tmp/b');
+    const scanA = projects.createScanFromResults(projA.id, 'A', '/tmp/a', [], []);
+    const scanB = projects.createScanFromResults(projB.id, 'B', '/tmp/b', [], []);
+
+    projects.deleteProject(projA.id);
+
+    const ids = new Set(projects.listScans().map(s => s.id));
+    assert.ok(!ids.has(scanA.id));
+    assert.ok(ids.has(scanB.id));
+    assert.ok(fs.existsSync(projects.scanPath(scanB.id)));
+  });
+});
+
+describe('deleteAllScans', () => {
+  it('removes every scan file and empties the index', () => {
+    const scanA = projects.createScanFromResults('pa', 'A', '/tmp/a', [], []);
+    const scanB = projects.createScanFromResults('pb', 'B', '/tmp/b', [], []);
+    assert.equal(projects.listScans().length, 2);
+
+    projects.deleteAllScans();
+
+    assert.equal(projects.listScans().length, 0);
+    assert.ok(!fs.existsSync(projects.scanPath(scanA.id)));
+    assert.ok(!fs.existsSync(projects.scanPath(scanB.id)));
+  });
+});
+
 describe('home directory expansion', () => {
   it('expands ~ in addProject path', () => {
     const proj = projects.addProject('Home', '~/some/dir');

@@ -118,6 +118,30 @@ function deleteProject(projectId) {
   const projects = readJson(projectsPath()) || [];
   writeJson(projectsPath(), projects.filter(p => p.id !== projectId));
   fs.rmSync(path.join(DATA_DIR, 'cache', 'xcresult', sanitizeId(projectId)), { recursive: true, force: true });
+  deleteScansForProject(projectId);
+}
+
+// Cascade-delete every scan belonging to a project (files + index entries).
+// Returns the ids of the deleted scans.
+function deleteScansForProject(projectId) {
+  const index = readIndex();
+  const deletedIds = index.filter(s => s.projectId === projectId).map(s => s.id);
+  for (const id of deletedIds) {
+    const p = scanPath(id);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+  writeJson(indexPath(), index.filter(s => !deletedIds.includes(s.id)));
+  return deletedIds;
+}
+
+// Remove every scan file and empty the index (used by config reset).
+function deleteAllScans() {
+  const index = readIndex();
+  for (const s of index) {
+    const p = scanPath(s.id);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+  writeJson(indexPath(), []);
 }
 
 // --- Scan Index ---
@@ -448,6 +472,8 @@ module.exports = {
   getScan,
   createScanFromResults,
   deleteScan,
+  deleteScansForProject,
+  deleteAllScans,
   updateScanModule,
   updateFailureStatus,
   batchUpdateStatus,

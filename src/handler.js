@@ -216,6 +216,8 @@ function createRouter() {
   router.post('/api/config/reset', (req, res) => {
     projects.resetProjects();
     templates.resetTemplates();
+    scanJobs.stopAllWatching();
+    projects.deleteAllScans();
     res.json({ reset: true });
   });
 
@@ -401,6 +403,10 @@ function createRouter() {
   });
 
   router.delete('/api/projects/:id', (req, res) => {
+    // Stop watchers on this project's scans before the cascade delete removes them.
+    for (const s of projects.listScans().filter(s => s.projectId === req.params.id)) {
+      scanJobs.stopWatching(s.id);
+    }
     projects.deleteProject(req.params.id);
     res.status(204).end();
   });
