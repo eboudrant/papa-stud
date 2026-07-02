@@ -311,6 +311,13 @@ function stopWatching(scanId) {
   }
 }
 
+function stopAllWatching() {
+  for (const watcher of watchers.values()) {
+    watcher.stop();
+  }
+  watchers.clear();
+}
+
 function isWatching(scanId) {
   return watchers.has(scanId);
 }
@@ -318,5 +325,5 @@ function isWatching(scanId) {
 module.exports = {
   startScan, startScanFromUrl, confirmScanFromUrl,
   getJob, cancelJob,
-  startWatching, stopWatching, isWatching, watchSupported,
+  startWatching, stopWatching, stopAllWatching, isWatching, watchSupported,
 };
