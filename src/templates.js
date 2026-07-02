@@ -94,6 +94,9 @@ function getTemplate(templateId) {
 function createTemplate(data) {
   const custom = readCustom();
   const tid = data.id || (data.name || 'custom').toLowerCase().replace(/ /g, '-');
+  if (BUILTIN_TEMPLATES.some(t => t.id === tid)) {
+    throw new Error(`template id "${tid}" conflicts with a built-in template`);
+  }
   const filtered = custom.filter(t => t.id !== tid);
   const template = {
     id: tid,

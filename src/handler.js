@@ -252,8 +252,12 @@ function createRouter() {
   router.post('/api/templates', (req, res) => {
     const body = req.body;
     if (!body || !body.name) return res.status(400).json({ error: 'name required' });
-    const t = templates.createTemplate(body);
-    res.status(201).json(t);
+    try {
+      const t = templates.createTemplate(body);
+      res.status(201).json(t);
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
   });
 
   router.post('/api/projects/:id/scan', (req, res) => {
