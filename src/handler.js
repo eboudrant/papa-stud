@@ -53,9 +53,11 @@ function createRouter() {
 
   router.get('/api/scans/:id', (req, res) => {
     const { page, size, status, q, module, profile, sort } = req.query;
+    const pageNum = Number.parseInt(page, 10);
+    const sizeNum = Number.parseInt(size, 10);
     const result = projects.getScan(req.params.id, {
-      page: parseInt(page) || 0,
-      size: parseInt(size) || 50,
+      page: Number.isFinite(pageNum) && pageNum >= 0 ? pageNum : 0,
+      size: Number.isFinite(sizeNum) && sizeNum >= 0 ? sizeNum : 50,
       status: status || undefined,
       query: q || undefined,
       module: module || undefined,

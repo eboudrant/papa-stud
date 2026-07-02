@@ -93,3 +93,39 @@ describe('POST /api/projects path validation', () => {
     assert.match(res.data.error, /absolute path required/);
   });
 });
+
+describe('GET /api/scans/:id pagination params', () => {
+  function seedScan() {
+    return projects.createScanFromResults(
+      'proj1', 'MyProject', '/tmp/proj', [],
+      [
+        { filename: 'a.png', module: ':app', profile: 'baseline', status: 'pending' },
+        { filename: 'b.png', module: ':app', profile: 'baseline', status: 'pending' },
+        { filename: 'c.png', module: ':app', profile: 'baseline', status: 'accepted' },
+      ]
+    );
+  }
+
+  it('honors size=0 as a stats-only request', async () => {
+    const scan = seedScan();
+    const res = await fetch(`${baseUrl}/api/scans/${scan.id}?page=0&size=0`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.deepEqual(data.failures, []);
+    assert.equal(data.totalFiltered, 3);
+    assert.ok(data.stats);
+    assert.equal(data.stats.pending, 2);
+    assert.equal(data.stats.accepted, 1);
+    assert.equal(data.pageSize, 0);
+  });
+
+  it('falls back to defaults for missing or invalid params', async () => {
+    const scan = seedScan();
+    const res = await fetch(`${baseUrl}/api/scans/${scan.id}?page=nope&size=-5`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.page, 0);
+    assert.equal(data.pageSize, 50);
+    assert.equal(data.failures.length, 3);
+  });
+});
