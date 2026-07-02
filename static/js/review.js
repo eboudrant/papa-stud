@@ -467,7 +467,14 @@ async function _toggleWatch(scanId) {
     _watching = false;
     _stopWatchPoll();
   } else {
-    await apiPost(`/api/scans/${scanId}/watch`, {});
+    try {
+      await apiPost(`/api/scans/${scanId}/watch`, {});
+    } catch (e) {
+      // e.g. 400 for xcresult-driven projects where per-module watch rescans
+      // would wipe the parse-derived failures. Surface it instead of throwing.
+      showToast(e.message || 'Watch is not available for this project', 'error');
+      return;
+    }
     _watching = true;
     // Rescan happened server-side, reload to show updated results
     _resetAndReload();

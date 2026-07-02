@@ -45,7 +45,10 @@ function createRouter() {
   });
 
   router.get('/api/scans/:id/watch', (req, res) => {
-    res.json({ watching: scanJobs.isWatching(req.params.id) });
+    res.json({
+      watching: scanJobs.isWatching(req.params.id),
+      supported: scanJobs.watchSupported(req.params.id) !== false,
+    });
   });
 
   router.get('/api/scans/:id', (req, res) => {
@@ -288,6 +291,11 @@ function createRouter() {
   });
 
   router.post('/api/scans/:id/watch', (req, res) => {
+    const supported = scanJobs.watchSupported(req.params.id);
+    if (supported === null) return res.status(404).json({ error: 'scan not found' });
+    if (!supported) {
+      return res.status(400).json({ error: 'watch is not supported for this project type' });
+    }
     if (scanJobs.startWatching(req.params.id)) {
       res.json({ watching: true });
     } else {

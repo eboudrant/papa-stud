@@ -249,6 +249,20 @@ function doExtractAndScan(jobId, project, tarFile, moduleRoots) {
 
 // --- Watcher management ---
 
+// Whether Watch mode is meaningful for a scan's strategy. Returns null when the
+// scan doesn't exist. Watch drives per-module file-convention rescans through
+// processSingleModule; strategies that derive failures from a single global
+// parse (xcresult / swift-snapshot via parseProjectFailures) don't fit that
+// model — a per-module rescan finds ~zero failures and would wipe the real,
+// parse-derived results, so Watch is unsupported for them.
+function watchSupported(scanId) {
+  const scan = projects.getScan(scanId, { page: 0, size: 0 });
+  if (!scan) return null;
+  const project = projects.getProject(scan.projectId || '');
+  const strategy = getStrategy(project?.strategy || 'gradle');
+  return typeof strategy.parseProjectFailures !== 'function';
+}
+
 function startWatching(scanId) {
   stopWatching(scanId);
   const scan = projects.getScan(scanId, { page: 0, size: 0 });
@@ -259,6 +273,12 @@ function startWatching(scanId) {
   const scanProfiles = project ? project.profiles : null;
   const strategyName = project?.strategy || 'gradle';
   const strategy = getStrategy(strategyName);
+
+  // Guard before the initial rescan: for xcresult-driven strategies the
+  // per-module rescan below would overwrite the parse-derived failures (and the
+  // user's accept/reject decisions) with an empty list. Refuse rather than
+  // destroy data. See watchSupported().
+  if (typeof strategy.parseProjectFailures === 'function') return false;
 
   const onModuleChange = (moduleName, modulePath) => {
     log(`[watch] rescanning module ${moduleName} at ${modulePath}`);
@@ -298,5 +318,5 @@ function isWatching(scanId) {
 module.exports = {
   startScan, startScanFromUrl, confirmScanFromUrl,
   getJob, cancelJob,
-  startWatching, stopWatching, isWatching,
+  startWatching, stopWatching, isWatching, watchSupported,
 };
