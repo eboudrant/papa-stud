@@ -20,7 +20,7 @@ jobs:
         arch: [x64, arm64]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         # Pinned to 22 (not 24): electron-forge 7.11.2 (latest stable) silently
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download arm64 artifacts
         uses: actions/download-artifact@v8
