@@ -129,27 +129,47 @@ function showDetail(scanId, filename) {
 }
 
 async function _loadDetail(scanId, filename) {
-  const data = await apiGet(`/api/scans/${scanId}?page=0&size=10000`);
-  _detailScan = data;
-  _detailFailures = data.failures;
-  _detailIndex = _detailFailures.findIndex(f => f.filename === filename);
-  _detailFailure = _detailIndex >= 0 ? _detailFailures[_detailIndex] : null;
-  setNavContext({
-    projectName: data.projectName,
-    className: _detailFailure?.class_name || '',
-    methodName: _detailFailure?.method || '',
-  });
+  try {
+    const data = await apiGet(`/api/scans/${scanId}?page=0&size=10000`);
+    _detailScan = data;
+    _detailFailures = data.failures;
+    _detailIndex = _detailFailures.findIndex(f => f.filename === filename);
+    _detailFailure = _detailIndex >= 0 ? _detailFailures[_detailIndex] : null;
+    setNavContext({
+      projectName: data.projectName,
+      className: _detailFailure?.class_name || '',
+      methodName: _detailFailure?.method || '',
+    });
 
-  if (!_detailFailure) {
-    document.getElementById('content').innerHTML = '<div class="empty-state">Failure not found</div>';
-    return;
-  }
+    if (!_detailFailure) {
+      document.getElementById('content').innerHTML = '<div class="empty-state">Failure not found</div>';
+      return;
+    }
 
-  _renderDetail(scanId);
-  if (_viewMode === 'slider') {
-    _initSliderDrag();
-  } else {
-    _initPanZoom();
+    _renderDetail(scanId);
+    if (_viewMode === 'slider') {
+      _initSliderDrag();
+    } else {
+      _initPanZoom();
+    }
+  } catch (err) {
+    // Without this catch a 404 (stale link after the scan was deleted or
+    // replaced) or a 500 leaves the page stuck on "Loading..." forever.
+    // Mirrors _renderReviewError in review.js.
+    const msg = (err && err.message) || String(err);
+    const content = document.getElementById('content');
+    if (content) {
+      // The router hands showDetail a decoded filename, so the retry call
+      // must round-trip it: encodeURIComponent to embed it safely in the
+      // attribute, decodeURIComponent when invoking _loadDetail.
+      content.innerHTML = `
+        <div class="empty-state">
+          <div>Couldn't load this failure.</div>
+          <div class="error-detail">${escHtml(msg)}</div>
+          <div style="margin-top:12px"><button class="btn" onclick="_loadDetail('${escAttr(scanId)}', decodeURIComponent('${escAttr(encodeURIComponent(filename))}'))">Retry</button> <a class="btn" href="#/scans/${escAttr(scanId)}">Back to scan</a></div>
+        </div>`;
+    }
+    console.error('[detail] load failed:', err);
   }
 }
 
