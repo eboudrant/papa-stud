@@ -123,6 +123,68 @@ describe('remoteFetch pure helpers', () => {
   });
 });
 
+describe('downloadToTemp abort and size cap', () => {
+  function listFetchTemps() {
+    return fs.readdirSync(os.tmpdir()).filter(n => n.startsWith('papastud-fetch-'));
+  }
+
+  function startServer(handler) {
+    return new Promise(resolve => {
+      const srv = http.createServer(handler);
+      srv.listen(0, '127.0.0.1', () => {
+        resolve([srv, `http://127.0.0.1:${srv.address().port}/result.tar`]);
+      });
+    });
+  }
+
+  async function stopServer(srv) {
+    srv.closeAllConnections?.();
+    await new Promise(r => srv.close(r));
+  }
+
+  it('aborting an in-flight download rejects and leaves no temp dir', async () => {
+    const before = new Set(listFetchTemps());
+    // Stream some bytes, then hang — only an abort can end this download.
+    const [srv, url] = await startServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/x-tar' });
+      res.write('partial-tar-bytes');
+    });
+    try {
+      const ac = new AbortController();
+      const download = remoteFetch.downloadToTemp(url, { signal: ac.signal });
+      // Let the download get past the headers and start streaming.
+      await new Promise(r => setTimeout(r, 150));
+      ac.abort();
+      await assert.rejects(download, /download cancelled/);
+      const leaked = listFetchTemps().filter(n => !before.has(n));
+      assert.deepEqual(leaked, [], 'partial download temp dir must be cleaned up');
+    } finally {
+      await stopServer(srv);
+    }
+  });
+
+  it('rejects a content-length over the cap without downloading the body', async () => {
+    const before = new Set(listFetchTemps());
+    const [srv, url] = await startServer((req, res) => {
+      // Advertise a huge body; never send it — the header check must bail first.
+      res.writeHead(200, {
+        'Content-Type': 'application/x-tar',
+        'Content-Length': String(remoteFetch.MAX_DOWNLOAD_BYTES + 1),
+      });
+      // No body write ever happens, so flush the buffered header explicitly —
+      // otherwise the client never receives it and fetch hangs on headers.
+      res.flushHeaders();
+    });
+    try {
+      await assert.rejects(remoteFetch.downloadToTemp(url), /download too large/);
+      const leaked = listFetchTemps().filter(n => !before.has(n));
+      assert.deepEqual(leaked, []);
+    } finally {
+      await stopServer(srv);
+    }
+  });
+});
+
 describe('POST /api/projects/:id/scan-from-url', () => {
   let tmpdir, projectRoot, server, baseUrl, tarServer, tarUrl, tarFile;
 
