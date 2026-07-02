@@ -688,48 +688,57 @@ async function _scanProject(id) {
 
 function _pollScanJob(jobId, projectId) {
   _pollTimers[jobId] = setInterval(async () => {
-    const job = await apiGet(`/api/scan-jobs/${jobId}`);
-    if (!job) {
-      _stopPolling(jobId);
-      _restoreScanButton(projectId);
-      return;
-    }
-
-    const fill = document.getElementById(`fill-${jobId}`);
-    const text = document.getElementById(`text-${jobId}`);
-
-    const FETCH_LABELS = { downloading: 'Downloading tarball...', extracting: 'Extracting build outputs...' };
-    if (FETCH_LABELS[job.status]) {
-      if (fill) { fill.classList.add('progress-pulse'); fill.style.width = '100%'; }
-      if (text) text.textContent = FETCH_LABELS[job.status];
-    } else if (job.status === 'needs_confirmation') {
-      _stopPolling(jobId);
-      _handleCompatConfirm(jobId, projectId, job.compat, text);
-    } else if (job.status === 'discovering') {
-      if (fill) fill.classList.add('progress-pulse');
-      if (text) text.textContent = `Discovering ${job.currentModule}...`;
-    } else if (job.status === 'scanning') {
-      if (fill) fill.classList.remove('progress-pulse');
-      const pct = job.totalModules > 0 ? Math.round((job.scannedModules / job.totalModules) * 100) : 0;
-      if (fill) fill.style.width = pct + '%';
-      if (text) text.textContent = `${job.currentModule} (${job.scannedModules}/${job.totalModules})`;
-    } else if (job.status === 'completed') {
-      _stopPolling(jobId);
-      if (job.scanId && job.failuresFound > 0) {
-        navigate(`/scans/${job.scanId}`);
-      } else {
-        showToast(`Scan complete — no failures found.`, 'success');
+    try {
+      const job = await apiGet(`/api/scan-jobs/${jobId}`);
+      if (!job) {
+        _stopPolling(jobId);
         _restoreScanButton(projectId);
-        await _loadHome();
+        return;
       }
-    } else if (job.status === 'cancelled') {
+
+      const fill = document.getElementById(`fill-${jobId}`);
+      const text = document.getElementById(`text-${jobId}`);
+
+      const FETCH_LABELS = { downloading: 'Downloading tarball...', extracting: 'Extracting build outputs...' };
+      if (FETCH_LABELS[job.status]) {
+        if (fill) { fill.classList.add('progress-pulse'); fill.style.width = '100%'; }
+        if (text) text.textContent = FETCH_LABELS[job.status];
+      } else if (job.status === 'needs_confirmation') {
+        _stopPolling(jobId);
+        _handleCompatConfirm(jobId, projectId, job.compat, text);
+      } else if (job.status === 'discovering') {
+        if (fill) fill.classList.add('progress-pulse');
+        if (text) text.textContent = `Discovering ${job.currentModule}...`;
+      } else if (job.status === 'scanning') {
+        if (fill) fill.classList.remove('progress-pulse');
+        const pct = job.totalModules > 0 ? Math.round((job.scannedModules / job.totalModules) * 100) : 0;
+        if (fill) fill.style.width = pct + '%';
+        if (text) text.textContent = `${job.currentModule} (${job.scannedModules}/${job.totalModules})`;
+      } else if (job.status === 'completed') {
+        _stopPolling(jobId);
+        if (job.scanId && job.failuresFound > 0) {
+          navigate(`/scans/${job.scanId}`);
+        } else {
+          showToast(`Scan complete — no failures found.`, 'success');
+          _restoreScanButton(projectId);
+          await _loadHome();
+        }
+      } else if (job.status === 'cancelled') {
+        _stopPolling(jobId);
+        showToast('Scan cancelled.', 'info');
+        _restoreScanButton(projectId);
+      } else if (job.status === 'failed') {
+        _stopPolling(jobId);
+        showToast(`Scan failed: ${job.error || 'unknown error'}`, 'error');
+        _restoreScanButton(projectId);
+      }
+    } catch (e) {
+      // apiGet throws on any non-2xx (e.g. job TTL expiry -> 404), so
+      // without this the interval would reject unhandled forever.
       _stopPolling(jobId);
-      showToast('Scan cancelled.', 'info');
       _restoreScanButton(projectId);
-    } else if (job.status === 'failed') {
-      _stopPolling(jobId);
-      showToast(`Scan failed: ${job.error || 'unknown error'}`, 'error');
-      _restoreScanButton(projectId);
+      console.error('[scan-poll] stopped:', e);
+      return;
     }
   }, 1500);
 }
