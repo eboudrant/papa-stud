@@ -33,7 +33,7 @@ function showReview(scanId) {
             <option value="diff">Sort: % diff</option>
           </select>
           <div class="toolbar-actions">
-            <button class="btn btn-sm btn-success" id="accept-all-btn" onclick="_acceptAll('${escAttr(scanId)}')" title="Copy every actual image over its golden" style="display:none">&check; Accept All</button>
+            <button class="btn btn-sm btn-success" id="accept-all-btn" onclick="_acceptAll('${escAttr(scanId)}')" title="Copy every actual image over its golden (rejected are skipped)" style="display:none">&check; Accept All</button>
             <button class="btn btn-sm" id="export-video-btn" onclick="_exportVideo('${scanId}')">Export Video</button>
             <button class="btn btn-sm" onclick="_rescanFromReview('${escAttr(scanId)}')">Re-scan</button>
             <button class="btn btn-sm watch-btn" id="watch-toggle" onclick="_toggleWatch('${escAttr(scanId)}')" title="Re-scan modules automatically as test outputs change">Watch</button>
@@ -414,12 +414,14 @@ async function _acceptAll(scanId) {
     if (result?.error) {
       showToast('Failed: ' + result.error, 'error');
     } else {
-      const msg = result.errors?.length
+      let msg = result.errors?.length
         ? `Accepted ${result.accepted} (${result.errors.length} failed)`
         : `Accepted ${result.accepted} baseline(s)`;
+      if (result.skippedRejected > 0) msg += ` (${result.skippedRejected} rejected skipped)`;
       showToast(msg, result.errors?.length ? 'error' : 'success');
       const failed = new Set((result.errors || []).map(e => e.filename));
       for (const f of _allFailures) {
+        if (f.status === 'rejected') continue;
         if (!failed.has(f.filename)) f.status = 'accepted';
       }
       if (_scanData) _scanData.stats = result.stats;

@@ -407,9 +407,11 @@ function acceptAllBaselines(scanId) {
   if (error) return { error };
 
   let accepted = 0;
+  let skippedRejected = 0;
   const errors = [];
   for (const failure of scan.failures) {
     if (failure.status === 'accepted') continue;
+    if (failure.status === 'rejected') { skippedRejected++; continue; }
     const err = _copyActualToGolden(failure, rootPrefix);
     if (err) {
       errors.push({ filename: failure.filename, error: err });
@@ -421,7 +423,7 @@ function acceptAllBaselines(scanId) {
 
   scan.stats = computeStats(scan.failures);
   writeJson(scanPath(scanId), scan);
-  return { stats: scan.stats, accepted, errors };
+  return { stats: scan.stats, accepted, errors, skippedRejected };
 }
 
 function isPathUnderProject(filePath) {
