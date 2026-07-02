@@ -117,6 +117,71 @@ describe('acceptBaseline', () => {
   });
 });
 
+describe('acceptAllBaselines', () => {
+  let projectDir;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-proj-real-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it('accepts pending failures but skips rejected ones', () => {
+    const pendingActual = path.join(projectDir, 'build', 'pending_actual.png');
+    const pendingGolden = path.join(projectDir, 'goldens', 'pending_golden.png');
+    const rejectedActual = path.join(projectDir, 'build', 'rejected_actual.png');
+    const rejectedGolden = path.join(projectDir, 'goldens', 'rejected_golden.png');
+    fs.mkdirSync(path.dirname(pendingActual), { recursive: true });
+    fs.mkdirSync(path.dirname(pendingGolden), { recursive: true });
+    fs.writeFileSync(pendingActual, 'PENDING_ACTUAL');
+    fs.writeFileSync(pendingGolden, 'PENDING_OLD_GOLDEN');
+    fs.writeFileSync(rejectedActual, 'REJECTED_ACTUAL');
+    fs.writeFileSync(rejectedGolden, 'REJECTED_OLD_GOLDEN');
+
+    const proj = projects.addProject('MyProj', projectDir);
+    const scan = projects.createScanFromResults(
+      proj.id, 'MyProj', projectDir, [],
+      [
+        {
+          filename: 'pending.png',
+          actual_path: pendingActual,
+          golden_path: pendingGolden,
+          module: ':app', profile: 'baseline', status: 'pending',
+        },
+        {
+          filename: 'rejected.png',
+          actual_path: rejectedActual,
+          golden_path: rejectedGolden,
+          module: ':app', profile: 'baseline', status: 'rejected',
+        },
+      ]
+    );
+
+    const result = projects.acceptAllBaselines(scan.id);
+    assert.ok(result);
+    assert.equal(result.error, undefined);
+    assert.equal(result.accepted, 1);
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.skippedRejected, 1);
+
+    // Pending failure got accepted and its golden overwritten with the actual.
+    assert.equal(fs.readFileSync(pendingGolden, 'utf8'), 'PENDING_ACTUAL');
+    // Rejected failure's golden was left untouched.
+    assert.equal(fs.readFileSync(rejectedGolden, 'utf8'), 'REJECTED_OLD_GOLDEN');
+
+    const updated = projects.getScan(scan.id);
+    const pending = updated.failures.find(f => f.filename === 'pending.png');
+    const rejected = updated.failures.find(f => f.filename === 'rejected.png');
+    assert.equal(pending.status, 'accepted');
+    assert.equal(rejected.status, 'rejected');
+    assert.equal(updated.stats.accepted, 1);
+    assert.equal(updated.stats.rejected, 1);
+    assert.equal(updated.stats.pending, 0);
+  });
+});
+
 describe('one scan per project', () => {
   it('second scan replaces first', () => {
     const scan1 = projects.createScanFromResults('proj1', 'MyProject', '/tmp/proj', [], []);
