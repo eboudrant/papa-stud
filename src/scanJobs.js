@@ -47,6 +47,7 @@ function makeJob(project, status, extra = {}) {
     error: null,
     _cancelFn: () => cancelled,
     _cancel: () => { cancelled = true; },
+    _abort: null, // AbortController while a download is in flight
     _finished_at: null,
     ...extra,
   };
@@ -98,6 +99,9 @@ function cancelJob(jobId) {
   const job = jobs.get(jobId);
   if (!job) return false;
   job._cancel();
+  // Abort an in-flight download immediately instead of letting it stream to
+  // completion before the cancel flag is even checked.
+  if (job._abort) job._abort.abort();
   // A job parked awaiting the compat-mismatch confirmation will never resume,
   // so finalize it and drop its downloaded tarball now.
   if (job.status === 'needs_confirmation') finishJob(job, 'cancelled');
@@ -197,8 +201,11 @@ function startScanFromUrl(project, url) {
 async function runFetch(jobId, project, url) {
   const job = jobs.get(jobId);
   if (!job) return;
+  const ac = new AbortController();
+  job._abort = ac;
   try {
-    const tarFile = await remoteFetch.downloadToTemp(url);
+    const tarFile = await remoteFetch.downloadToTemp(url, { signal: ac.signal });
+    job._abort = null;
     job._tarFile = tarFile;
     if (job._cancelFn()) return finishJob(job, 'cancelled');
     job.status = 'extracting';
@@ -216,6 +223,9 @@ async function runFetch(jobId, project, url) {
     }
     doExtractAndScan(jobId, project, tarFile, compat.modules);
   } catch (e) {
+    job._abort = null;
+    // A cancel-triggered abort is not a failure — surface it as 'cancelled'.
+    if (job._cancelFn() && ac.signal.aborted) return finishJob(job, 'cancelled');
     finishJob(job, 'failed', e.message);
   }
 }

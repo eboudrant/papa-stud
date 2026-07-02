@@ -22,8 +22,13 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
-const { Readable } = require('stream');
+const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
+
+// Hard cap on a scan-from-url download. CI screenshot tarballs are tens of
+// megabytes; anything past this is a mistake (or abuse) and we bail before
+// filling the disk.
+const MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
 
 // Parse and validate a fetch URL. Returns the URL object; throws on a
 // malformed or non-http(s) URL. Shared by the route handler (fail fast with a
@@ -37,18 +42,56 @@ function validateFetchUrl(url) {
   return parsed;
 }
 
-// Stream a remote tarball to a temp file. Returns the temp file path.
-// Throws on a non-http(s) URL or a non-2xx response.
-async function downloadToTemp(url) {
-  validateFetchUrl(url);
-  const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
-  if (!res.body) throw new Error('download failed: empty response body');
+// Counts bytes flowing through and errors once the cap is exceeded, so
+// chunked responses without a content-length header are capped too.
+function byteCapTransform(limit) {
+  let seen = 0;
+  return new Transform({
+    transform(chunk, _enc, cb) {
+      seen += chunk.length;
+      if (seen > limit) {
+        cb(new Error(`download too large (exceeds ${limit} bytes)`));
+        return;
+      }
+      cb(null, chunk);
+    },
+  });
+}
 
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-fetch-'));
-  const tarFile = path.join(dir, 'result.tar');
-  await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(tarFile));
-  return tarFile;
+// Stream a remote tarball to a temp file. Returns the temp file path.
+// Throws on a non-http(s) URL, a non-2xx response, a download exceeding
+// MAX_DOWNLOAD_BYTES, or an abort via opts.signal (as 'download cancelled').
+// On any failure the temp dir is removed before rethrowing.
+async function downloadToTemp(url, opts = {}) {
+  validateFetchUrl(url);
+  const { signal } = opts;
+  let res = null;
+  let tarFile = null;
+  try {
+    res = await fetch(url, { redirect: 'follow', signal });
+    if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
+    if (!res.body) throw new Error('download failed: empty response body');
+    const contentLength = Number(res.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_DOWNLOAD_BYTES) {
+      throw new Error(`download too large (${contentLength} bytes, cap is ${MAX_DOWNLOAD_BYTES})`);
+    }
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-fetch-'));
+    tarFile = path.join(dir, 'result.tar');
+    await pipeline(
+      Readable.fromWeb(res.body),
+      byteCapTransform(MAX_DOWNLOAD_BYTES),
+      fs.createWriteStream(tarFile),
+      { signal }
+    );
+    return tarFile;
+  } catch (e) {
+    cleanupTemp(tarFile); // never leak a partial download
+    // Drop the connection if the body wasn't fully consumed (e.g. size-cap bail).
+    try { res?.body?.cancel()?.catch(() => {}); } catch {}
+    if (signal?.aborted) throw new Error('download cancelled');
+    throw e;
+  }
 }
 
 // An entry is unsafe if it is absolute or escapes the extraction root.
@@ -155,6 +198,7 @@ function cleanupTemp(tarFile) {
 }
 
 module.exports = {
+  MAX_DOWNLOAD_BYTES,
   validateFetchUrl,
   downloadToTemp,
   listBuildMembers,
