@@ -37,6 +37,16 @@ async function postJson(pathname, body) {
   return { status: res.status, data };
 }
 
+async function putJson(pathname, body) {
+  const res = await fetch(baseUrl + pathname, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  return { status: res.status, data };
+}
+
 describe('POST /api/projects path validation', () => {
   it('rejects path that does not exist', async () => {
     const res = await postJson('/api/projects', { path: '/definitely/not/a/real/dir/xyz123' });
@@ -127,5 +137,64 @@ describe('GET /api/scans/:id pagination params', () => {
     assert.equal(data.page, 0);
     assert.equal(data.pageSize, 50);
     assert.equal(data.failures.length, 3);
+  });
+});
+
+describe('PUT failure status validation', () => {
+  let scan;
+
+  beforeEach(() => {
+    scan = projects.createScanFromResults(
+      'proj1', 'MyProject', '/tmp/proj', [],
+      [
+        { filename: 'a.png', module: ':app', profile: 'baseline', status: 'pending' },
+        { filename: 'b.png', module: ':app', profile: 'baseline', status: 'pending' },
+      ]
+    );
+  });
+
+  it('rejects an invalid status on the single-failure route', async () => {
+    const res = await putJson(`/api/scans/${scan.id}/failures/a.png/status`, { status: 'bogus' });
+    assert.equal(res.status, 400);
+    assert.match(res.data.error, /invalid status: bogus/);
+    const stats = projects.getScan(scan.id).stats;
+    assert.equal(stats.pending, 2);
+  });
+
+  it('rejects an invalid status on the batch route', async () => {
+    const res = await putJson(`/api/scans/${scan.id}/failures/batch`, {
+      status: 'bogus',
+      filenames: ['a.png', 'b.png'],
+    });
+    assert.equal(res.status, 400);
+    assert.match(res.data.error, /invalid status: bogus/);
+    const stats = projects.getScan(scan.id).stats;
+    assert.equal(stats.pending, 2);
+  });
+
+  it('rejects non-array filenames on the batch route', async () => {
+    const res = await putJson(`/api/scans/${scan.id}/failures/batch`, {
+      status: 'accepted',
+      filenames: 'a.png',
+    });
+    assert.equal(res.status, 400);
+    assert.match(res.data.error, /filenames must be an array/);
+  });
+
+  it('accepts a valid status on the single-failure route and updates stats', async () => {
+    const res = await putJson(`/api/scans/${scan.id}/failures/a.png/status`, { status: 'accepted' });
+    assert.equal(res.status, 200);
+    assert.equal(res.data.accepted, 1);
+    assert.equal(res.data.pending, 1);
+  });
+
+  it('accepts a valid status on the batch route and updates stats', async () => {
+    const res = await putJson(`/api/scans/${scan.id}/failures/batch`, {
+      status: 'rejected',
+      filenames: ['a.png', 'b.png'],
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.data.rejected, 2);
+    assert.equal(res.data.pending, 0);
   });
 });

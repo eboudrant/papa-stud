@@ -366,9 +366,14 @@ function createRouter() {
     else res.status(404).json({ error: 'project not found' });
   });
 
+  const VALID_STATUSES = new Set(['pending', 'accepted', 'rejected']);
+
   router.put('/api/scans/:scanId/failures/:filename/status', (req, res) => {
     const body = req.body;
     if (!body || !body.status) return res.status(400).json({ error: 'status required' });
+    if (!VALID_STATUSES.has(body.status)) {
+      return res.status(400).json({ error: `invalid status: ${body.status}` });
+    }
     const stats = projects.updateFailureStatus(req.params.scanId, req.params.filename, body.status);
     if (stats) res.json(stats);
     else res.status(404).json({ error: 'not found' });
@@ -378,6 +383,12 @@ function createRouter() {
     const body = req.body;
     if (!body || !body.status || !body.filenames) {
       return res.status(400).json({ error: 'status and filenames required' });
+    }
+    if (!VALID_STATUSES.has(body.status)) {
+      return res.status(400).json({ error: `invalid status: ${body.status}` });
+    }
+    if (!Array.isArray(body.filenames)) {
+      return res.status(400).json({ error: 'filenames must be an array' });
     }
     const stats = projects.batchUpdateStatus(req.params.scanId, body.filenames, body.status);
     if (stats) res.json(stats);
