@@ -693,7 +693,7 @@ footer .footer-links a:hover { color: var(--text); }
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </div>
       <h3>Review CI results remotely</h3>
-      <p>Paste a CI run's result tarball URL (e.g. a Jenkins artifact) and Papa Stud.io downloads it, overlays the failures onto your local project, and scans — reviewing the remote run against your local goldens.</p>
+      <p>Paste a CI run's result tarball URL (e.g. a Jenkins artifact) — or upload one or more <code>.zip</code>/<code>.tar</code>/<code>.tar.gz</code> archives from disk. Papa Stud.io overlays the failures onto your local project and scans against your local goldens. Multiple archives are merged into one scan; if two disagree on a file's content, the scan is aborted and the conflicts are listed.</p>
     </div>
   </div>
 </section>

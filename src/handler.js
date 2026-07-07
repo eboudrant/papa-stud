@@ -15,8 +15,11 @@ const updateCheck = require('./updateCheck');
 const apng = require('./apng');
 const imageSlice = require('./imageSlice');
 const remoteFetch = require('./remoteFetch');
+const localArchive = require('./localArchive');
+const { pipeline } = require('stream/promises');
 
 const STATIC_DIR = path.resolve(__dirname, '..', 'static');
+const UPLOAD_EXT_RE = /\.(zip|tar|tar\.gz|tgz)$/i;
 const INDEX_HTML = path.join(STATIC_DIR, 'index.html');
 
 function createRouter() {
@@ -288,10 +291,59 @@ function createRouter() {
     res.status(202).json({ jobId });
   });
 
-  // Resume a scan-from-url job that parked because the tarball's module layout
-  // didn't line up with the project (compat mismatch).
+  // Stream one uploaded archive to a temp file and return an opaque id the
+  // client later names in scan-from-uploads. Body is the raw file bytes
+  // (Content-Type is ignored; express.json() leaves non-JSON bodies intact, so
+  // the request stream reaches us here unread). We pipe straight to disk — never
+  // buffering the (up to 2 GB) body in memory — and enforce the same size cap as
+  // a scan-from-url download.
+  //
+  // codeql[js/missing-rate-limiting]: by design — single-user local app, server
+  // binds 127.0.0.1 (no remote attacker). See `.claude/rules/dev_workflow.md`.
+  router.post('/api/uploads', async (req, res) => {
+    const raw = req.query.filename;
+    const filename = typeof raw === 'string' ? path.basename(decodeURIComponent(raw)) : '';
+    if (!filename || !UPLOAD_EXT_RE.test(filename)) {
+      return res.status(400).json({ error: 'filename with .zip/.tar/.tar.gz extension required' });
+    }
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-upload-'));
+    const dest = path.join(dir, 'archive');
+    try {
+      await pipeline(req, remoteFetch.byteCapTransform(localArchive.MAX_UPLOAD_BYTES), fs.createWriteStream(dest));
+    } catch (e) {
+      localArchive.cleanupUpload(dest);
+      const tooLarge = /too large/.test(e.message || '');
+      return res.status(tooLarge ? 413 : 400).json({ error: e.message || 'upload failed' });
+    }
+    const size = fs.statSync(dest).size;
+    const uploadId = scanJobs.registerUpload({ path: dest, filename, dir });
+    res.status(201).json({ uploadId, filename, size });
+  });
+
+  // Merge several uploaded archives (by upload id) and overlay their build/
+  // artifacts onto a project, then scan — like scan-from-url but for local
+  // files. May park at `needs_confirmation`, or fail with a `conflicts` list
+  // when the archives disagree on a file's content.
+  router.post('/api/projects/:id/scan-from-uploads', (req, res) => {
+    const project = projects.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: 'project not found' });
+    const uploadIds = req.body && req.body.uploadIds;
+    if (!Array.isArray(uploadIds) || uploadIds.length === 0) {
+      return res.status(400).json({ error: 'uploadIds required' });
+    }
+    if (uploadIds.length > localArchive.MAX_UPLOAD_FILES) {
+      return res.status(400).json({ error: `too many files (max ${localArchive.MAX_UPLOAD_FILES})` });
+    }
+    const uploadList = scanJobs.takeUploads(uploadIds);
+    if (!uploadList) return res.status(400).json({ error: 'unknown or expired upload id' });
+    const jobId = scanJobs.startScanFromUploads(project, uploadList);
+    res.status(202).json({ jobId });
+  });
+
+  // Resume a scan job (URL or uploads) that parked because the archive's module
+  // layout didn't line up with the project (compat mismatch).
   router.post('/api/scan-jobs/:id/confirm', (req, res) => {
-    if (scanJobs.confirmScanFromUrl(req.params.id)) {
+    if (scanJobs.confirmScanJob(req.params.id)) {
       res.json({ ok: true });
     } else {
       res.status(404).json({ error: 'job not awaiting confirmation' });

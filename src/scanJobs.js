@@ -5,12 +5,14 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const projects = require('./projects');
 const { scanProjectIncrementalSync, processSingleModule } = require('./scanner');
 const { createWatcher } = require('./watcher');
 const { getStrategy } = require('./strategies');
 const remoteFetch = require('./remoteFetch');
+const localArchive = require('./localArchive');
 
 function projectCacheDir(projectId) {
   return path.join(projects.getDataDir(), 'cache', 'xcresult', projectId);
@@ -27,6 +29,35 @@ const log = (...args) => { if (DEBUG) console.log(...args); };
 const jobs = new Map();
 const watchers = new Map(); // scanId -> watcher
 const JOB_TTL = 300_000; // 5 minutes in ms
+
+// --- Upload registry (raw file uploads awaiting a scan-from-uploads call) ---
+//
+// A raw upload streams to a temp file and gets an opaque id; the client later
+// names those ids in scan-from-uploads. Kept here (not in handler.js) so the
+// existing cleanupOldJobs interval can also reap uploads that were streamed but
+// never consumed. Entries are removed on takeUploads (ownership passes to the
+// job) or TTL-reaped if abandoned.
+const uploads = new Map(); // uploadId -> { path, filename, dir, created_at }
+
+function registerUpload({ path: uploadPath, filename, dir }) {
+  const uploadId = crypto.randomBytes(8).toString('hex');
+  uploads.set(uploadId, { path: uploadPath, filename, dir, created_at: Date.now() });
+  return uploadId;
+}
+
+// Resolve ids to their temp files and remove them from the registry so the
+// caller (a scan job) owns cleanup. Returns null if any id is unknown, without
+// consuming the others (they will TTL-reap).
+function takeUploads(ids) {
+  const out = [];
+  for (const id of ids) {
+    const u = uploads.get(id);
+    if (!u) return null;
+    out.push({ uploadId: id, path: u.path, filename: u.filename });
+  }
+  for (const id of ids) uploads.delete(id);
+  return out;
+}
 
 // Build and register a job with the shared progress shape. `extra` carries
 // status-specific fields (e.g. the fetch job's tarball bookkeeping).
@@ -58,11 +89,17 @@ function makeJob(project, status, extra = {}) {
 // Move a job to a terminal state, releasing any downloaded tarball exactly
 // once. Every terminal transition (cancel, timeout, failure) goes through here
 // so the temp file can't be leaked.
-function finishJob(job, status, error = null) {
+function finishJob(job, status, error = null, conflicts = null) {
   remoteFetch.cleanupTemp(job._tarFile);
   job._tarFile = null;
+  if (job._stageDirs) { localArchive.cleanupStages(job._stageDirs); job._stageDirs = null; }
+  if (job._uploadPaths) {
+    for (const u of job._uploadPaths) localArchive.cleanupUpload(u.path);
+    job._uploadPaths = null;
+  }
   job.status = status;
   if (error !== null) job.error = error;
+  if (conflicts !== null) job.conflicts = conflicts;
   job._finished_at = Date.now();
 }
 
@@ -92,6 +129,7 @@ function getJob(jobId) {
     scanId: job.scan_id,
     error: job.error,
     compat: job.compat || null,
+    conflicts: job.conflicts || null,
   };
 }
 
@@ -110,6 +148,13 @@ function cancelJob(jobId) {
 
 function cleanupOldJobs() {
   const now = Date.now();
+  // Reap raw uploads that were streamed but never consumed by a scan.
+  for (const [id, u] of uploads) {
+    if (now - u.created_at > JOB_TTL) {
+      localArchive.cleanupUpload(u.path);
+      uploads.delete(id);
+    }
+  }
   for (const [id, job] of jobs) {
     // Drop a tarball left parked on an un-confirmed fetch job that's gone stale.
     if (job.status === 'needs_confirmation' && job._parked_at && now - job._parked_at > JOB_TTL) {
@@ -230,14 +275,23 @@ async function runFetch(jobId, project, url) {
   }
 }
 
-// Resume a job parked on a compat-mismatch confirmation.
-function confirmScanFromUrl(jobId) {
+// Resume a job parked on a compat-mismatch confirmation. Kind-aware: the URL
+// flow re-extracts from its tarball, the uploads flow overlays its stage dirs.
+// Both mirror their happy path's confirm semantics — overlay *all* module roots
+// present in the archive(s), since the user confirmed writing despite the
+// mismatch (creating new <root>/build dirs in the project as needed).
+function confirmScanJob(jobId) {
   const job = jobs.get(jobId);
   if (!job || job.status !== 'needs_confirmation') return false;
   job.status = 'extracting';
   // Defer the (blocking) extract off the request so /confirm returns immediately.
-  const { _project, _tarFile, _modules } = job;
-  setImmediate(() => doExtractAndScan(jobId, _project, _tarFile, _modules));
+  if (job._kind === 'uploads') {
+    const { _project, _stageDirs, compat } = job;
+    setImmediate(() => doOverlayAndScan(jobId, _project, _stageDirs, compat.modules));
+  } else {
+    const { _project, _tarFile, _modules } = job;
+    setImmediate(() => doExtractAndScan(jobId, _project, _tarFile, _modules));
+  }
   return true;
 }
 
@@ -252,6 +306,87 @@ function doExtractAndScan(jobId, project, tarFile, moduleRoots) {
   }
   remoteFetch.cleanupTemp(tarFile);
   job._tarFile = null;
+  // Hand off to the normal scan flow against the now-overlaid project dir.
+  job.status = 'discovering';
+  runScan(jobId, project);
+}
+
+// --- Scan from uploaded files (merge several local archives, overlay, scan) ---
+
+// Kick off an extract + merge + conflict-check + overlay + scan against an
+// existing project. `uploads` is [{ uploadId, path, filename }]; ownership of
+// the temp files passes to the job (freed on any terminal transition).
+function startScanFromUploads(project, uploadList) {
+  cleanupOldJobs();
+  log(`[uploads] scan-from-uploads for "${project.name}" <- ${uploadList.length} file(s)`);
+  const job = makeJob(project, 'extracting', {
+    _kind: 'uploads',
+    _project: project,
+    _uploadPaths: uploadList.map(u => ({ path: u.path, filename: u.filename })),
+    _stageDirs: null,
+    _modules: null,
+    _parked_at: null,
+    conflicts: null,
+  });
+  setImmediate(() => runUploads(job.id, project, uploadList));
+  return job.id;
+}
+
+function runUploads(jobId, project, uploadList) {
+  const job = jobs.get(jobId);
+  if (!job) return;
+  try {
+    job.status = 'extracting';
+    // 1. Extract every archive fully into its own stage dir.
+    const stageDirs = [];
+    job._stageDirs = stageDirs;
+    for (const u of uploadList) {
+      if (job._cancelFn()) return finishJob(job, 'cancelled');
+      const stageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'papastud-stage-'));
+      localArchive.extractArchive(u.path, stageDir);
+      stageDirs.push({ name: u.filename, dir: stageDir });
+    }
+    if (job._cancelFn()) return finishJob(job, 'cancelled');
+
+    // 2. Merge + detect cross-archive content conflicts.
+    const { members, conflicts } = localArchive.mergeStages(stageDirs);
+    if (conflicts.length) {
+      // Abort before touching the project — the deltas disagree and we can't
+      // know which is authoritative.
+      return finishJob(job, 'failed', 'conflicting files across archives', conflicts);
+    }
+    if (!members.length) throw new Error('no build/ artifacts found in archives');
+
+    // 3. Which modules line up with this project's layout? checkCompat works on
+    // member-name strings, so hand it the relative paths.
+    const compat = remoteFetch.checkCompat(members.map(m => m.relPath), project.path);
+    job._modules = compat.matched;
+    if (!compat.compatible) {
+      job.compat = compat;
+      job.status = 'needs_confirmation';
+      job._parked_at = Date.now();
+      return;
+    }
+    doOverlayAndScan(jobId, project, stageDirs, compat.matched);
+  } catch (e) {
+    finishJob(job, 'failed', e.message);
+  }
+}
+
+function doOverlayAndScan(jobId, project, stageDirs, moduleRoots) {
+  const job = jobs.get(jobId);
+  if (!job) { localArchive.cleanupStages(stageDirs); return; }
+  try {
+    localArchive.overlayBuildDirs(stageDirs, moduleRoots, project.path);
+  } catch (e) {
+    finishJob(job, 'failed', e.message);
+    return;
+  }
+  // Free the stage dirs and raw uploads now that build outputs are overlaid.
+  localArchive.cleanupStages(stageDirs);
+  job._stageDirs = null;
+  for (const u of job._uploadPaths || []) localArchive.cleanupUpload(u.path);
+  job._uploadPaths = null;
   // Hand off to the normal scan flow against the now-overlaid project dir.
   job.status = 'discovering';
   runScan(jobId, project);
@@ -333,7 +468,8 @@ function isWatching(scanId) {
 }
 
 module.exports = {
-  startScan, startScanFromUrl, confirmScanFromUrl,
+  startScan, startScanFromUrl, confirmScanJob,
+  startScanFromUploads, registerUpload, takeUploads,
   getJob, cancelJob,
   startWatching, stopWatching, stopAllWatching, isWatching, watchSupported,
 };

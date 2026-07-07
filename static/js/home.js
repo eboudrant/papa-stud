@@ -127,6 +127,12 @@ function _renderProjects(projectsList) {
         <button class="btn btn-sm" onclick="_hideScanFromUrl('${escAttr(p.id)}')">Cancel</button>
       </div>
       <div class="url-form-hint">Downloads the tarball and overlays its <code>build/</code> outputs onto this project, then scans against your local goldens.</div>
+      <div class="url-form-or">or upload archive files</div>
+      <div class="add-form-row">
+        <input type="file" id="file-input-${p.id}" class="input input-wide" multiple accept=".zip,.tar,.gz,.tgz">
+        <button class="btn btn-sm btn-primary" onclick="_scanFromFiles('${escAttr(p.id)}')">Upload &amp; Scan</button>
+      </div>
+      <div class="url-form-hint">Select one or more <code>.zip</code> / <code>.tar</code> / <code>.tar.gz</code> archives. They're merged and overlaid onto this project. If two archives contain the same file with different content, the scan is aborted and the conflicts are listed.</div>
     </div>
     <div class="profiles-form" id="profiles-${p.id}" style="display:none">
       <div class="profiles-list" id="profiles-list-${p.id}"></div>
@@ -739,7 +745,11 @@ function _pollScanJob(jobId, projectId) {
         _restoreScanButton(projectId);
       } else if (job.status === 'failed') {
         _stopPolling(jobId);
-        showToast(`Scan failed: ${job.error || 'unknown error'}`, 'error');
+        if (job.conflicts && job.conflicts.length) {
+          _showConflictDialog(job.conflicts);
+        } else {
+          showToast(`Scan failed: ${job.error || 'unknown error'}`, 'error');
+        }
         _restoreScanButton(projectId);
       }
     } catch (e) {
@@ -807,6 +817,89 @@ async function _scanFromUrl(projectId) {
   }
 
   _pollScanJob(jobId, projectId);
+}
+
+// Upload one or more local archives, merge them onto the project, then scan.
+async function _scanFromFiles(projectId) {
+  const input = document.getElementById(`file-input-${projectId}`);
+  const files = input && input.files ? Array.from(input.files) : [];
+  if (!files.length) return;
+  _hideScanFromUrl(projectId);
+
+  // Show an indeterminate upload progress (no cancel until the scan job exists).
+  const actionsEl = document.getElementById(`actions-${projectId}`);
+  const setProgress = (msg) => {
+    if (!actionsEl) return;
+    actionsEl.innerHTML = `
+      <div class="scan-progress">
+        <div class="progress-bar-wrap">
+          <div class="progress-fill progress-pulse" style="width:100%"></div>
+        </div>
+        <span class="progress-text">${escHtml(msg)}</span>
+      </div>
+    `;
+  };
+
+  const uploadIds = [];
+  try {
+    for (let i = 0; i < files.length; i++) {
+      setProgress(`Uploading ${files.length > 1 ? `(${i + 1}/${files.length}) ` : ''}${files[i].name}...`);
+      const res = await fetch(`/api/uploads?filename=${encodeURIComponent(files[i].name)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: files[i],
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `upload failed (HTTP ${res.status})`);
+      }
+      uploadIds.push((await res.json()).uploadId);
+    }
+  } catch (err) {
+    showToast(err.message || 'Upload failed', 'error');
+    _restoreScanButton(projectId);
+    return;
+  }
+
+  let resp;
+  try {
+    resp = await apiPost(`/api/projects/${projectId}/scan-from-uploads`, { uploadIds });
+  } catch (err) {
+    showToast(err.message || 'Failed to start scan', 'error');
+    _restoreScanButton(projectId);
+    return;
+  }
+  const jobId = resp.jobId;
+
+  if (actionsEl) {
+    actionsEl.innerHTML = `
+      <div class="scan-progress">
+        <div class="progress-bar-wrap">
+          <div class="progress-fill progress-pulse" id="fill-${jobId}" style="width:100%"></div>
+        </div>
+        <span class="progress-text" id="text-${jobId}">Extracting build outputs...</span>
+        <button class="btn btn-sm btn-danger-text" onclick="_cancelScan('${jobId}', '${projectId}')">Cancel</button>
+      </div>
+    `;
+  }
+
+  _pollScanJob(jobId, projectId);
+}
+
+// Two or more uploaded archives contained the same file with differing content,
+// so the merge was aborted. List the conflicts (truncated) for the user.
+function _showConflictDialog(conflicts) {
+  const sample = conflicts.slice(0, 8)
+    .map(c => `  ${c.path}\n    (in ${(c.archives || []).join(', ')})`)
+    .join('\n');
+  const more = conflicts.length > 8 ? `\n  …and ${conflicts.length - 8} more` : '';
+  window.alert(
+    `Scan aborted: the selected archives disagree on ${conflicts.length} file` +
+    `${conflicts.length === 1 ? '' : 's'}.\n\n` +
+    `Same path, different content:\n${sample}${more}\n\n` +
+    `Nothing was written to the project. Re-select archives from a single run, ` +
+    `or remove the conflicting ones.`
+  );
 }
 
 // The tarball's module layout didn't line up with the project. Ask the user
