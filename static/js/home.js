@@ -69,7 +69,10 @@ async function _loadHome() {
   _checkForUpdateOnce();
 }
 
-const UPDATE_CMD = 'brew upgrade --cask papastudio';
+// Homebrew 6.0+ (June 2026) requires third-party taps to be trusted before it
+// will load their casks; `brew trust` is idempotent and a no-op once trusted,
+// so chaining it keeps the copy-paste command working across upgrades.
+const UPDATE_CMD = 'brew trust eboudrant/tap && brew upgrade --cask papastudio';
 const UPDATE_DISMISSED_KEY = 'papastud_update_dismissed';
 let _updateChecked = false;
 

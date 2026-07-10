@@ -16,14 +16,22 @@ https://github.com/user-attachments/assets/c8d35b14-fd80-4e6e-989f-63c041bea9a7
 
 ```
 brew tap eboudrant/tap
+brew trust eboudrant/tap        # Homebrew 6.0+ only
 brew install --cask papastudio
 ```
+
+Homebrew 6.0 (June 2026) requires third-party taps to be trusted before it will
+load their casks. If `brew trust` isn't recognized you're on an older Homebrew
+and can skip that line.
 
 ## Update
 
 ```
 brew update && brew upgrade --cask papastudio
 ```
+
+If the upgrade fails with *"Refusing to load cask ... from untrusted tap"*, run
+`brew trust eboudrant/tap` once, then retry.
 
 ## Run from source
 

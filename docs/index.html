@@ -701,12 +701,14 @@ footer .footer-links a:hover { color: var(--text); }
 <section id="install">
   <span class="section-eyebrow reveal">Install</span>
   <h2 class="section-title reveal">Up and running in seconds</h2>
-  <p class="section-sub reveal">macOS via Homebrew. Single command, no extra setup.</p>
+  <p class="section-sub reveal">macOS via Homebrew. A few commands, no extra setup.</p>
   <div class="pre-wrap reveal">
     <pre>brew tap eboudrant/tap
+brew trust eboudrant/tap
 brew install --cask papastudio</pre>
     <button class="btn-copy" onclick="_copy(this)" aria-label="Copy install command">Copy</button>
   </div>
+  <p class="section-sub reveal"><code>brew trust</code> is required on Homebrew 6.0+ before it will load a third-party tap. On older Homebrew that line is unnecessary — skip it.</p>
 </section>
 
 <section id="screenshots">
