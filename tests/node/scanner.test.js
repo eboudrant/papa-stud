@@ -366,6 +366,35 @@ describe('roborazzi naming', () => {
     assert.ok(result.includes('TestClass'));
   });
 
+  it('resolves a golden with a literal space when the delta name has %20', () => {
+    // Roborazzi can emit the compare/delta with a percent-encoded space while
+    // recording the golden with a literal space. The pair must still match.
+    const root = tmpdir;
+    const deep = path.join(root, 'src', 'goldens', 'pkg');
+    fs.mkdirSync(deep, { recursive: true });
+    makePng(path.join(deep, 'complete pause ad layout.Foo_bar.png'));
+
+    const result = resolveGolden(
+      root, ['src/goldens/**/{name}.png'], 'complete%20pause ad layout.Foo_bar.png',
+    );
+    assert.ok(result !== null, 'golden with literal space should resolve from a %20 delta name');
+    assert.ok(result.endsWith('complete pause ad layout.Foo_bar.png'));
+  });
+
+  it('resolves a golden with %20 when the delta name has a literal space', () => {
+    // The reverse direction — golden recorded with %20, delta with a space.
+    const root = tmpdir;
+    const deep = path.join(root, 'src', 'goldens', 'pkg');
+    fs.mkdirSync(deep, { recursive: true });
+    makePng(path.join(deep, 'my%20snap.Foo_bar.png'));
+
+    const result = resolveGolden(
+      root, ['src/goldens/**/{name}.png'], 'my snap.Foo_bar.png',
+    );
+    assert.ok(result !== null, 'golden with %20 should resolve from a literal-space delta name');
+    assert.ok(result.endsWith('my%20snap.Foo_bar.png'));
+  });
+
   describe('AGP 9 fallback', () => {
     it('withAgp9Fallback appends the androidHostTest sibling', () => {
       assert.deepEqual(
