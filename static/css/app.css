@@ -240,6 +240,14 @@ select.input { appearance: auto; }
 }
 .url-form-hint { font-size: 11px; color: var(--text-dim); margin-top: var(--space-sm); }
 .url-form-hint code { font-family: monospace; }
+.url-form-or {
+  display: flex; align-items: center; gap: var(--space-sm);
+  font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;
+  margin: var(--space-md) 0 var(--space-sm);
+}
+.url-form-or::before, .url-form-or::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
 /* Keep the card-action icon button grouped with its siblings (the global
    .btn-icon:first-of-type auto-margin is meant for the header, not here). */
 .card-actions .btn-icon:first-of-type { margin-left: 0; }

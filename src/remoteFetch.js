@@ -210,4 +210,6 @@ module.exports = {
   isBuildMember,
   moduleRootOf,
   buildDirsForModules,
+  // shared with localArchive.js (raw upload byte cap)
+  byteCapTransform,
 };
