@@ -217,16 +217,34 @@ function withAgp9Fallback(patterns) {
   return out;
 }
 
+// Candidate golden basenames to try, in preference order. Some tools (notably
+// Roborazzi) URL-encode spaces in the emitted compare/delta filename while
+// recording the golden with a literal space — e.g. delta
+// `complete%20pause ad layout.….png` vs golden `complete pause ad layout.….png`.
+// We try the name verbatim first, then variants that toggle `%20`↔space and a
+// safely percent-decoded form, so the pair still matches either direction.
+function goldenNameCandidates(name) {
+  const out = [name];
+  const add = (n) => { if (n && !out.includes(n)) out.push(n); };
+  add(name.replace(/%20/gi, ' ')); // encoded space -> literal
+  add(name.replace(/ /g, '%20'));  // literal space -> encoded
+  try { add(decodeURIComponent(name)); } catch { /* malformed % — skip */ }
+  return out;
+}
+
 function resolveGolden(modulePath, goldenPatterns, snapshotName) {
-  const name = snapshotName.endsWith('.png') ? snapshotName.slice(0, -4) : snapshotName;
+  const raw = snapshotName.endsWith('.png') ? snapshotName.slice(0, -4) : snapshotName;
+  const names = goldenNameCandidates(raw);
   for (const pattern of goldenPatterns) {
-    const resolved = pattern.replace('{name}', name);
-    if (resolved.includes('**')) {
-      const matches = fg.sync(resolved, { cwd: modulePath, absolute: true });
-      if (matches.length) return matches[0];
-    } else {
-      const candidate = path.join(modulePath, resolved);
-      try { if (fs.statSync(candidate).isFile()) return candidate; } catch {}
+    for (const name of names) {
+      const resolved = pattern.replace('{name}', name);
+      if (resolved.includes('**')) {
+        const matches = fg.sync(resolved, { cwd: modulePath, absolute: true });
+        if (matches.length) return matches[0];
+      } else {
+        const candidate = path.join(modulePath, resolved);
+        try { if (fs.statSync(candidate).isFile()) return candidate; } catch {}
+      }
     }
   }
   return null;
