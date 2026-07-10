@@ -94,8 +94,21 @@ function collectBuildMembers(stageDir) {
   return members;
 }
 
+// sha256 of a file, read in chunks so a large member (archives are capped at
+// 2 GB) is never loaded into memory in one go.
 function hashFile(absPath) {
-  return crypto.createHash('sha256').update(fs.readFileSync(absPath)).digest('hex');
+  const hash = crypto.createHash('sha256');
+  const fd = fs.openSync(absPath, 'r');
+  try {
+    const buf = Buffer.allocUnsafe(1 << 20); // 1 MiB
+    let n;
+    while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
+      hash.update(n === buf.length ? buf : buf.subarray(0, n));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return hash.digest('hex');
 }
 
 // Merge the build members of several staged archives, detecting conflicts.
@@ -108,17 +121,19 @@ function hashFile(absPath) {
 //    differing bytes. Empty when the merge is clean. Identical-content
 //    duplicates are merged silently (no conflict).
 function mergeStages(stages) {
-  const seen = new Map();       // relPath -> { hash, absPath, archives:Set }
+  const seen = new Map();       // relPath -> { absPath, hash|null, archives:Set }
   const conflicts = new Map();  // relPath -> Set of archive names
   for (const stage of stages) {
     for (const { relPath, absPath } of collectBuildMembers(stage.dir)) {
       const prior = seen.get(relPath);
       if (!prior) {
-        seen.set(relPath, { hash: hashFile(absPath), absPath, archives: new Set([stage.name]) });
+        // Defer hashing until a path actually collides — the common case
+        // (disjoint archives, single archive) then hashes nothing at all.
+        seen.set(relPath, { absPath, hash: null, archives: new Set([stage.name]) });
         continue;
       }
-      const hash = hashFile(absPath);
-      if (hash === prior.hash) {
+      if (prior.hash === null) prior.hash = hashFile(prior.absPath);
+      if (hashFile(absPath) === prior.hash) {
         prior.archives.add(stage.name); // identical duplicate — fine
         continue;
       }

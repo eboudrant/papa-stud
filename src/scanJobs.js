@@ -360,14 +360,16 @@ function runUploads(jobId, project, uploadList) {
     // 3. Which modules line up with this project's layout? checkCompat works on
     // member-name strings, so hand it the relative paths.
     const compat = remoteFetch.checkCompat(members.map(m => m.relPath), project.path);
-    job._modules = compat.matched;
     if (!compat.compatible) {
       job.compat = compat;
       job.status = 'needs_confirmation';
       job._parked_at = Date.now();
       return;
     }
-    doOverlayAndScan(jobId, project, stageDirs, compat.matched);
+    // Overlay all module roots present in the archives (matching the URL flow's
+    // doExtractAndScan, which passes compat.modules) so a partially-matching
+    // upload doesn't silently drop the unmatched modules' results.
+    doOverlayAndScan(jobId, project, stageDirs, compat.modules);
   } catch (e) {
     finishJob(job, 'failed', e.message);
   }
@@ -376,6 +378,9 @@ function runUploads(jobId, project, uploadList) {
 function doOverlayAndScan(jobId, project, stageDirs, moduleRoots) {
   const job = jobs.get(jobId);
   if (!job) { localArchive.cleanupStages(stageDirs); return; }
+  // A cancel that landed after the last check in runUploads shouldn't still
+  // write into the project.
+  if (job._cancelFn()) return finishJob(job, 'cancelled');
   try {
     localArchive.overlayBuildDirs(stageDirs, moduleRoots, project.path);
   } catch (e) {

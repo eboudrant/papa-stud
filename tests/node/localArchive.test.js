@@ -320,5 +320,8 @@ describe('POST /api/uploads + /api/projects/:id/scan-from-uploads', () => {
     assert.equal((await post(`/api/projects/${projectId}/scan-from-uploads`, { uploadIds: ['deadbeef'] })).status, 400);
     // Unknown project.
     assert.equal((await post('/api/projects/nope/scan-from-uploads', { uploadIds: ['x'] })).status, 404);
+    // Too many files (cap is checked before id resolution, so bogus ids are fine here).
+    const tooMany = Array.from({ length: localArchive.MAX_UPLOAD_FILES + 1 }, (_, i) => `id${i}`);
+    assert.equal((await post(`/api/projects/${projectId}/scan-from-uploads`, { uploadIds: tooMany })).status, 400);
   });
 });

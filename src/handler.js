@@ -301,8 +301,10 @@ function createRouter() {
   // codeql[js/missing-rate-limiting]: by design — single-user local app, server
   // binds 127.0.0.1 (no remote attacker). See `.claude/rules/dev_workflow.md`.
   router.post('/api/uploads', async (req, res) => {
+    // Express already percent-decodes query values, so decode no further —
+    // just strip any path components the client may have included.
     const raw = req.query.filename;
-    const filename = typeof raw === 'string' ? path.basename(decodeURIComponent(raw)) : '';
+    const filename = typeof raw === 'string' ? path.basename(raw) : '';
     if (!filename || !UPLOAD_EXT_RE.test(filename)) {
       return res.status(400).json({ error: 'filename with .zip/.tar/.tar.gz extension required' });
     }
