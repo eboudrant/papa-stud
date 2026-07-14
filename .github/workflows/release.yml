@@ -28,7 +28,7 @@ jobs:
         # and emits no .dmg/.zip, so the release produces no installers. Node 22
         # builds them correctly. Revisit when a stable electron-forge supports
         # Node 24 (only 8.0.0-alpha does today).
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
